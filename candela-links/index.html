@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Candela</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="loading">Cargando…</div>
+  </div>
+
+  <div id="message-box" class="hidden">
+    <button id="message-toggle" aria-label="Escribir un mensaje">✍️</button>
+    <div id="message-panel" class="hidden">
+      <textarea id="message-text" maxlength="2000" placeholder="Escribe algo…"></textarea>
+      <button id="message-send">Enviar</button>
+      <div id="message-status"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

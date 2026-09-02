@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/((?!api/|admin/|admin$|style.css|app.js).*)", "destination": "/index.html" }
+  ]
+}

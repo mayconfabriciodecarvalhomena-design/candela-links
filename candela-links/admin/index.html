@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Candela · Panel</title>
+  <link rel="stylesheet" href="/admin/admin.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="login-view">
+    <h1>Candela · Panel</h1>
+    <form id="login-form">
+      <input id="login-email" type="email" placeholder="Email" required />
+      <input id="login-password" type="password" placeholder="Contraseña" required />
+      <button type="submit">Entrar</button>
+      <div id="login-error" class="error"></div>
+    </form>
+  </div>
+
+  <div id="dashboard-view" class="hidden">
+    <header>
+      <h1>Candela · Panel</h1>
+      <button id="logout-btn">Salir</button>
+    </header>
+
+    <section id="new-link-section">
+      <h2>Crear enlace</h2>
+      <form id="new-link-form">
+        <input id="new-link-label" type="text" placeholder="Nombre interno (ej. Persona A)" required />
+        <select id="new-link-project"></select>
+        <button type="submit">Crear</button>
+      </form>
+      <div id="new-link-result"></div>
+    </section>
+
+    <section id="links-section">
+      <h2>Tus enlaces</h2>
+      <div id="links-list"></div>
+    </section>
+
+    <section id="messages-section" class="hidden">
+      <h2 id="messages-title">Mensajes</h2>
+      <button id="close-messages-btn">← Volver</button>
+      <div id="messages-list"></div>
+    </section>
+  </div>
+
+  <script type="module" src="/admin/admin.js"></script>
+</body>
+</html>

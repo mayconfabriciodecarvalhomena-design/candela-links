@@ -1,0 +1,54 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0; font-family: system-ui, -apple-system, sans-serif;
+  background: #0a0a0a; color: #eee; min-height: 100vh;
+}
+.hidden { display: none !important; }
+
+#login-view {
+  height: 100vh; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1rem;
+}
+#login-form { display: flex; flex-direction: column; gap: 8px; width: 260px; }
+
+input, select, textarea, button {
+  font-family: inherit; font-size: 14px;
+  background: #151515; color: #eee; border: 1px solid #333;
+  border-radius: 6px; padding: 8px;
+}
+button { cursor: pointer; background: #d9822b; border: none; color: #fff; }
+button:hover { opacity: 0.9; }
+.error { color: #e05c5c; font-size: 13px; min-height: 16px; }
+
+header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 24px; border-bottom: 1px solid #222;
+}
+
+section { padding: 20px 24px; border-bottom: 1px solid #161616; }
+h2 { font-size: 15px; opacity: 0.8; font-weight: 500; margin-bottom: 12px; }
+
+#new-link-form { display: flex; gap: 8px; flex-wrap: wrap; }
+#new-link-result { margin-top: 10px; font-size: 13px; }
+#new-link-result code {
+  background: #151515; padding: 4px 8px; border-radius: 4px; user-select: all;
+}
+
+.link-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid #161616; gap: 12px; flex-wrap: wrap;
+}
+.link-row .label { font-weight: 500; }
+.link-row .slug { opacity: 0.5; font-size: 12px; }
+.link-row .count { font-size: 12px; opacity: 0.8; }
+.link-row .count.unread { color: #d9822b; font-weight: 600; }
+.link-row select { font-size: 12px; padding: 4px; }
+.link-row .view-btn { font-size: 12px; padding: 4px 10px; }
+
+.message-item {
+  padding: 10px; margin-bottom: 8px; background: #121212;
+  border-radius: 8px; border-left: 3px solid #333;
+}
+.message-item.unread { border-left-color: #d9822b; }
+.message-item .content { white-space: pre-wrap; }
+.message-item .meta { font-size: 11px; opacity: 0.5; margin-top: 6px; }
