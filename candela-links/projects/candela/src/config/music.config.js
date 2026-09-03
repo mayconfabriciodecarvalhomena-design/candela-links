@@ -19,7 +19,7 @@ export const MUSIC_CONFIG = {
   // Rutas relativas a index.html.
   // Si el array está vacío, la aplicación funciona sin música.
   tracks: [
-    "assets/audio/cancion1.mp3",
+    "assets/audio/cancion1.mp4",
     "assets/audio/cancion2.wav",
     "assets/audio/cancion3.mp3",
   ],
