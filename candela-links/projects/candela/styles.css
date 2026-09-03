@@ -1,0 +1,486 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #050403;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#app canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Texto narrativo (src/narrative.js): frases que aparecen sobre la
+   escena, p. ej. al apagarse la vela. Creado dinámicamente en JS, no
+   vive en index.html. */
+.narrative-text {
+  position: fixed;
+  left: 50%;
+  bottom: 12%;
+  transform: translate(-50%, 12px);
+  width: min(32rem, 80vw);
+  padding: 0 1.5rem;
+  text-align: center;
+  color: #f2e6d0;
+  font-size: 1.15rem;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  font-style: italic;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.1s ease, transform 1.1s ease;
+  text-shadow: 0 0 14px rgba(0, 0, 0, 0.65);
+  z-index: 10;
+}
+
+.narrative-text.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* -----------------------------------------------------------------------
+   CAT HOVER LABEL: nombre ("Chloe") que aparece con un fundido suave al
+   pasar el cursor sobre el gato en 3D, y lo sigue en pantalla. Se
+   posiciona con `translate` (via JS en catHover.js) y el fundido de
+   opacidad se gestiona aquí con `.is-visible` — el mismo patrón que
+   `.narrative-text.is-visible` para la narrativa. El cursor NO se
+   modifica aquí; eso lo sigue gestionando matchesController.js para la
+   cerilla — no se pisan entre sí porque son listeners diferentes sobre
+   el mismo <canvas>.
+   ----------------------------------------------------------------------- */
+.cat-hover-label {
+  position: fixed;
+  top: 0;
+  left: 0;
+
+  pointer-events: none;
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+
+  color: #d4cdc4;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.95rem;
+  font-style: italic;
+  letter-spacing: 0.015em;
+  white-space: nowrap;
+  user-select: none;
+
+  text-shadow: 0 0 4px rgba(235, 229, 218, 0.45), 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+.cat-hover-label.is-visible { opacity: 1; }
+
+/* -----------------------------------------------------------------------
+   INTRO (src/intro.js): pantalla negra minimalista de entrada, creada
+   dinámicamente en JS (no vive en index.html), superpuesta sobre el
+   canvas mientras la escena 3D se prepara detrás.
+
+   Aparición escalonada mediante transition-delay/@keyframes (nunca
+   JS): marco → pregunta introductoria (aparece, se mantiene, se
+   desvanece) → título → línea bajo el título → significado → botón. El
+   botón permanece visualmente inerte hasta que intro.js le añade
+   ".is-ready" (carga real terminada, nunca un temporizador). En cuanto
+   termina de verdad la transición CSS del botón, intro.js lo
+   interpreta como "composición asentada" y avisa a main.js — ver la
+   nota de rendimiento más abajo.
+
+   Detalles puramente decorativos (no cambian la estructura narrativa:
+   negro → ¿Qué significa Candela? → CANDELA → significado → botón →
+   transición a la escena):
+     - .intro-frame: NO es un rectángulo completo, son 6 segmentos
+       independientes (línea superior, línea inferior, y un stub corto
+       en cada esquina) que nacen con transform: scale*(0) — invisibles
+       de verdad, no solo con opacidad — y se dibujan empezando por las
+       esquinas, cada uno con su propio retraso.
+     - .intro-question: pregunta introductoria que aparece antes que el
+       título, se mantiene un par de segundos y se desvanece para
+       siempre (nunca vuelve a mostrarse) — un único @keyframes con
+       fade-in, hold y fade-out, sin ningún setTimeout en JS.
+     - .intro-title-line: línea bajo el título con el mismo ancho que
+       el título renderizado (truco de inline-flex + stretch, sin medir
+       nada por JS), crece desde el centro hacia ambos lados.
+     - .intro-overlay::after: grano de película muy sutil (ruido SVG
+       generado por CSS, sin textura externa).
+     - .intro-content: respiración vertical de ~1.5px una vez toda la
+       composición ha aparecido.
+
+   NOTA DE RENDIMIENTO: mientras estas animaciones se reproducen (los
+   primeros ~11s, alargado en esta iteración por la nueva pregunta
+   introductoria), main.js todavía NO ha llamado a initScene() — el
+   trabajo pesado de Three.js (crear el renderer, cargar candle.glb/
+   cat.glb, arrancar el render loop) se retrasa a propósito hasta que
+   intro.js avisa de que la composición ha terminado de aparecer
+   (`onCompositionSettled`, disparado por el propio `transitionend` del
+   botón). Así estas transiciones CSS nunca compiten por el hilo
+   principal con la carga/render de Three.js. Ver src/main.js.
+   ----------------------------------------------------------------------- */
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  opacity: 1;
+  transition: opacity 1.4s ease;
+}
+
+.intro-overlay.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Partículas decorativas (src/introParticles.js): canvas 2D a pantalla
+   completa, insertado como primer hijo de .intro-overlay (ver
+   introParticles.js) para pintarse siempre detrás del marco, la
+   pregunta y la composición central. Puramente decorativo: nunca
+   intercepta clics ni interfiere con el botón u otra interacción. */
+.intro-particles {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+
+/* Grano de película: ruido SVG (feTurbulence, desaturado) usado como
+   textura de fondo repetida, a opacidad casi nula. Nunca intercepta
+   clics y se desvanece junto con el resto de la intro (al ser un
+   pseudo-elemento del propio overlay, hereda su fundido de salida). */
+.intro-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.045;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch' result='t'/%3E%3CfeColorMatrix in='t' type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+/* ---- Marco decorativo: 6 segmentos, no un rectángulo completo ---- */
+.intro-frame {
+  position: absolute;
+  inset: 12% 14%;
+  pointer-events: none;
+}
+
+.intro-frame-line {
+  position: absolute;
+  background: rgba(242, 230, 208, 0.3);
+  transition: transform 1.2s ease;
+}
+
+.intro-frame-top,
+.intro-frame-bottom {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.intro-frame-top {
+  top: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.intro-frame-bottom {
+  bottom: 0;
+  transform: scaleX(0);
+  transform-origin: right center;
+}
+
+.intro-frame-stub {
+  width: 1px;
+  height: 1.75rem;
+}
+
+.intro-frame-stub-tl {
+  top: 0;
+  left: 0;
+  transform: scaleY(0);
+  transform-origin: top center;
+}
+
+.intro-frame-stub-tr {
+  top: 0;
+  right: 0;
+  transform: scaleY(0);
+  transform-origin: top center;
+}
+
+.intro-frame-stub-bl {
+  bottom: 0;
+  left: 0;
+  transform: scaleY(0);
+  transform-origin: bottom center;
+}
+
+.intro-frame-stub-br {
+  bottom: 0;
+  right: 0;
+  transform: scaleY(0);
+  transform-origin: bottom center;
+}
+
+/* Orden de aparición del marco: empieza en la esquina superior
+   izquierda y va recorriendo el rectángulo hasta la esquina inferior
+   izquierda, cada segmento con su propio retraso. */
+.intro-overlay.is-visible .intro-frame-stub-tl {
+  transition-delay: 0.3s;
+  transform: scaleY(1);
+}
+
+.intro-overlay.is-visible .intro-frame-top {
+  transition-delay: 0.5s;
+  transform: scaleX(1);
+}
+
+.intro-overlay.is-visible .intro-frame-stub-tr {
+  transition-delay: 1s;
+  transform: scaleY(1);
+}
+
+.intro-overlay.is-visible .intro-frame-stub-br {
+  transition-delay: 1.5s;
+  transform: scaleY(1);
+}
+
+.intro-overlay.is-visible .intro-frame-bottom {
+  transition-delay: 1.8s;
+  transform: scaleX(1);
+}
+
+.intro-overlay.is-visible .intro-frame-stub-bl {
+  transition-delay: 2.3s;
+  transform: scaleY(1);
+}
+
+@media (max-width: 520px) {
+  .intro-frame {
+    inset: 7% 6%;
+  }
+
+  .intro-frame-stub {
+    height: 1.25rem;
+  }
+}
+
+/* ---- Pregunta introductoria (antes del título) ----
+   Posicionada de forma independiente (position: absolute, centrada
+   sobre el mismo punto que .intro-content) para que, al desvanecerse,
+   no deje ningún hueco ni desplace al título/línea/significado/botón.
+   Toda la secuencia — aparece, se mantiene ~2.3s, se desvanece — es un
+   único @keyframes con animation-fill-mode: forwards (se queda oculta
+   para siempre al terminar), disparado por la misma clase
+   "is-visible" que arranca el resto de la intro. */
+.intro-question {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: 0;
+  padding: 0 1.5rem;
+  max-width: 36rem;
+  text-align: center;
+  white-space: nowrap;
+  font-style: italic;
+  font-size: clamp(1.45rem, 4vw, 1.9rem);
+  letter-spacing: 0.05em;
+  line-height: 1.5;
+  color: #304f73;
+  opacity: 0;
+  transform: translate(-50%, calc(-50% + 8px));
+  pointer-events: none;
+}
+
+.intro-overlay.is-visible .intro-question {
+  animation: intro-question-sequence 4.3s ease-in-out 0.3s 1 forwards;
+}
+
+@keyframes intro-question-sequence {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px));
+    letter-spacing: 0.05em;
+  }
+  23% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+    letter-spacing: 0.05em;
+  }
+  77% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+    letter-spacing: 0.05em;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - 6px));
+    letter-spacing: 0.16em;
+  }
+}
+
+/* ---- Composición central (respira una vez visible del todo) ---- */
+.intro-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.75rem;
+  animation: intro-breathe 9s ease-in-out infinite;
+  animation-delay: 11s;
+}
+
+@keyframes intro-breathe {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.5px);
+  }
+}
+
+.intro-title,
+.intro-meaning,
+.intro-button {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 1.6s ease, transform 1.6s ease;
+}
+
+.intro-overlay.is-visible .intro-title {
+  transition-delay: 5.1s;
+}
+
+.intro-overlay.is-visible .intro-meaning {
+  transition-delay: 7.8s;
+}
+
+.intro-overlay.is-visible .intro-button {
+  transition-delay: 9.4s;
+}
+
+.intro-overlay.is-visible .intro-title,
+.intro-overlay.is-visible .intro-meaning,
+.intro-overlay.is-visible .intro-button {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Envoltorio del título + su línea: inline-flex en columna hace que se
+   ajuste al ancho natural del título (el hijo más ancho), y
+   align-items: stretch (valor por defecto de flex, aquí explícito)
+   hace que la línea, sin ancho propio, ocupe exactamente ese mismo
+   ancho — sin medir nada por JS. */
+.intro-title-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+}
+
+.intro-title {
+  margin: 0;
+  font-weight: 400;
+  font-size: clamp(2.1rem, 6vw, 3.2rem);
+  letter-spacing: 0.38em;
+  color: #f2e6d0;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+/* Línea bajo el título: mismo ancho que el título (heredado del
+   envoltorio) más un pequeño margen negativo para sobresalir
+   ligeramente, tal y como funciona como "subrayado" del título. Crece
+   desde el centro hacia ambos lados (transform-origin: center) después
+   de que el título haya terminado de aparecer, como parte de la propia
+   revelación del título. Puramente decorativa, sin relación con
+   .narrative-text. */
+.intro-title-line {
+  height: 1px;
+  margin: 0 -0.5rem;
+  background: rgba(242, 230, 208, 0.4);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 1.1s ease;
+}
+
+.intro-overlay.is-visible .intro-title-line {
+  transition-delay: 6.7s;
+  transform: scaleX(1);
+}
+
+.intro-meaning {
+  margin: 0;
+  max-width: 26rem;
+  padding: 0 1.5rem;
+  text-align: center;
+  font-style: italic;
+  font-size: 1.05rem;
+  line-height: 1.65;
+  letter-spacing: 0.01em;
+  color: #cbb99a;
+}
+
+.intro-button {
+  margin-top: 0.5rem;
+  padding: 0.85em 2.4em;
+  /* Evita que el botón cambie de ancho con cada actualización del
+     porcentaje ("CARGANDO ESCENA 0%" → "...100%" → "CARGAR ESCENA");
+     el texto queda centrado dentro de un ancho estable. */
+  min-width: 15rem;
+  text-align: center;
+  background: transparent;
+  border: 1px solid rgba(242, 230, 208, 0.35);
+  color: #f2e6d0;
+  font-family: inherit;
+  font-size: 0.8rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  cursor: default;
+  pointer-events: none;
+  transition: opacity 1.6s ease, transform 1.6s ease, border-color 0.6s ease,
+    background 0.6s ease;
+}
+
+/* Etiqueta del botón (src/intro.js): "CARGANDO ESCENA X%" mientras se
+   prepara la escena, "CARGAR ESCENA" en cuanto está lista. El único
+   cambio animado es el salto final de un texto a otro (fundido corto);
+   las actualizaciones de porcentaje mientras carga son saltos de texto
+   directos, sin transición, tal y como se pidió. */
+.intro-button-label {
+  display: inline-block;
+  transition: opacity 0.22s ease;
+}
+
+.intro-button-label.is-swapping {
+  opacity: 0;
+}
+
+.intro-button.is-ready {
+  cursor: pointer;
+  pointer-events: auto;
+  border-color: rgba(242, 230, 208, 0.75);
+}
+
+.intro-button.is-ready:hover {
+  border-color: #f2e6d0;
+  background: rgba(242, 230, 208, 0.07);
+}

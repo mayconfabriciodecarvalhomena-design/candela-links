@@ -14,22 +14,23 @@ function getSlugFromPath() {
 
 // -----------------------------------------------------------
 // Registro de proyectos disponibles.
-// Hoy solo existe un placeholder para 'candela'; cuando integremos
-// el proyecto real de Three.js, esta es la única línea que cambia:
-// añadir 'candela': () => import('./projects/candela/main.js')
+// Cada loader devuelve `true` si ya gestiona su propio widget de mensaje
+// (como Candela, que lo trae incrustado dentro de su iframe), o `false`/nada
+// si queremos que initMessageWidget() se encargue desde aquí.
 // -----------------------------------------------------------
 const PROJECT_LOADERS = {
-  candela: mountCandelaPlaceholder,
+  candela: mountCandela,
 };
 
-function mountCandelaPlaceholder() {
-  appEl.innerHTML = `
-    <div class="placeholder">
-      <h1>Candela</h1>
-      <p>Aquí se cargará la experiencia. (Integración pendiente — de momento
-      esto confirma que tu enlace funciona y que puedes escribir un mensaje.)</p>
-    </div>
-  `;
+function mountCandela(slug) {
+  appEl.innerHTML = '';
+  appEl.style.cssText = 'width:100%; height:100%; padding:0;';
+  const iframe = document.createElement('iframe');
+  iframe.src = `/projects/candela/index.html?slug=${encodeURIComponent(slug)}`;
+  iframe.style.cssText = 'width:100%; height:100%; border:none; display:block;';
+  iframe.allow = 'autoplay';
+  appEl.appendChild(iframe);
+  return true; // Candela ya trae su propio widget de mensaje dentro del iframe
 }
 
 function mountNotFound() {
@@ -60,8 +61,8 @@ async function init() {
     return;
   }
 
-  await PROJECT_LOADERS[projectId]();
-  initMessageWidget(slug);
+  const handlesOwnWidget = await PROJECT_LOADERS[projectId](slug);
+  if (!handlesOwnWidget) initMessageWidget(slug);
 }
 
 function initMessageWidget(slug) {

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Candela</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="message-widget.css" />
+ 
+  <!-- Three.js vía CDN + import map, sin bundler -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- Widget de mensaje: independiente de main.js, no interfiere con Candela -->
+  <div id="message-box" class="hidden">
+    <button id="message-toggle" aria-label="Escribir un mensaje">✍️</button>
+    <div id="message-panel" class="hidden">
+      <textarea id="message-text" maxlength="2000" placeholder="Escribe algo…"></textarea>
+      <button id="message-send">Enviar</button>
+      <div id="message-status"></div>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+  <script type="module" src="message-widget.js"></script>
+</body>
+</html>
+ 
