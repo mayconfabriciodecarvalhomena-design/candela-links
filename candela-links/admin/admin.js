@@ -7,8 +7,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Rellena estos dos valores con los tuyos (Supabase → Project Settings → API)
-const SUPABASE_URL = 'PON_AQUI_TU_SUPABASE_URL';
-const SUPABASE_ANON_KEY = 'PON_AQUI_TU_SUPABASE_ANON_KEY';
+const SUPABASE_URL = 'https://ybnqzsincxtumruzufvl.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlibnF6c2luY3h0dW1ydXp1ZnZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzgyNTUsImV4cCI6MjEwMzk1NDI1NX0.eKxxNof43kGYp9hrehK4wf8aiwMqLQxaUnXKGGHYQS0';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
