@@ -472,13 +472,20 @@ export const FINALE_CONFIG = {
       // Punto final: calculado respecto a la CÁMARA REAL (mismo
       // criterio que cfg.travel del sobre más arriba), NUNCA respecto
       // al sobre — así la carta termina SIEMPRE delante de él, sea
-      // cual sea su posición exacta. `finalDistanceFromCamera` (0.6)
-      // es deliberadamente MENOR que `travel.distanceFromCamera` del
-      // sobre (0.8): más cerca de la cámara que el sobre significa,
-      // por definición, delante de él (ver "REGLA DE ORO" de un
-      // encargo anterior: "el sobre puede quedar parcialmente tapado,
-      // eso es correcto").
-      finalDistanceFromCamera: 0.6,
+      // cual sea su posición exacta.
+      //
+      // ITERACIÓN — MÁS PRESENCIA EN PANTALLA (ver encargo: "quiero que
+      // al finalizar la animación la hoja tenga una presencia
+      // claramente mayor... una ampliación razonable, no exagerada").
+      // `finalDistanceFromCamera` baja de 0.6 a 0.54 (10% más cerca de
+      // la cámara). Sigue siendo deliberadamente MENOR que
+      // `travel.distanceFromCamera` del sobre (0.8): más cerca de la
+      // cámara que el sobre significa, por definición, delante de él
+      // (ver "REGLA DE ORO" de un encargo anterior: "el sobre puede
+      // quedar parcialmente tapado, eso es correcto"), y sigue con
+      // margen de sobra respecto al near plane de la cámara (0.1, ver
+      // config.js) — sin riesgo de clipping.
+      finalDistanceFromCamera: 0.54,
       finalVerticalOffset: 0.02,
 
       // Curvatura sutil de la trayectoria (Bézier cuadrática, mismo
@@ -487,16 +494,23 @@ export const FINALE_CONFIG = {
       arcHeight: 0.05,
       lateralOffset: 0.02,
 
-      // ESCALA DEFINITIVA (constante, no animada): la carta aparece YA
-      // a su tamaño final (escala fija en `finalScale` desde el primer
-      // frame de LETTER_RISE; solo posición y opacidad animan). Escala
-      // del `group` de la carta (nunca de la geometría base, ver
-      // width/height más arriba) — 1.2 → un 20% más grande que el tamaño
-      // base (0.205×0.29 → 0.246×0.348). Razonado a partir del tamaño
-      // real del sobre en esta escena (cfg.envelope: cuerpo 0.27×0.18 +
-      // solapa 0.095 ≈ 0.27×0.275 de silueta total): a 1.2x la carta
-      // queda del mismo orden de magnitud que el propio sobre.
-      finalScale: 1.2,
+      // ESCALA FINAL del `group` de la carta (nunca de la geometría
+      // base, ver width/height más arriba), fijada DESDE EL PRIMER
+      // FRAME de LETTER_RISE (ver candelaFinale.js) — nunca una rampa:
+      // "debe aparecer ya con su geometría final/tamaño final" (ver
+      // encargo de una iteración anterior).
+      //
+      // ITERACIÓN — sube de 1.2 a 1.3 (junto con el acercamiento de
+      // `finalDistanceFromCamera` de arriba) para una presencia
+      // claramente mayor en pantalla, sin resultar exagerada: a 60cm
+      // de la cámara real (fov=56°, ver config.js) la carta pasa de
+      // ocupar ≈54% a ≈66% de la altura del encuadre y de ≈22% a ≈26%
+      // del ancho — sigue leyéndose como una hoja delante del sobre,
+      // nunca tapando la escena. 1.3 → un 30% más grande que el
+      // tamaño base (0.205×0.29 → 0.267×0.377). Sigue del mismo orden
+      // de magnitud que el sobre (cuerpo 0.27×0.18 + solapa 0.095 de
+      // alto ≈ 0.27×0.275 de silueta total).
+      finalScale: 1.3,
     },
 
     // -----------------------------------------------------------------------
@@ -549,20 +563,42 @@ export const FINALE_CONFIG = {
       // cuerpo del texto (ver buildPageTexture() en letterMesh.js) —
       // mismo criterio que el resto del proyecto: un único canvas
       // oculto, nunca HTML/DOM.
+      //
+      // ITERACIÓN — REDISEÑO (ver encargo: "el título debe tener un
+      // tamaño MAYOR que el texto normal" — antes 40px de título contra
+      // 46px de cuerpo, exactamente al revés). `sizePx` sube a 52
+      // (ahora claramente mayor que `text.font.sizePx` = 34, más
+      // abajo). Se añade `separator`: una línea fina decorativa bajo
+      // el título (ver mockup del encargo), horneada en la misma
+      // textura — nunca un elemento aparte.
       title: {
         // Margen superior antes del título, y separación entre el
-        // título y el texto que viene debajo — ambos como fracción de
-        // la altura del canvas oculto (mismo criterio de resolución
-        // relativa que `text.font.canvasHeightPx` más abajo, así el
-        // margen se mantiene proporcional sea cual sea el tamaño real
-        // de la carta).
+        // título (o el separador, si existe) y el texto que viene
+        // debajo — ambos como fracción de la altura del canvas oculto
+        // (mismo criterio de resolución relativa que
+        // `text.font.canvasHeightPx` más abajo, así el margen se
+        // mantiene proporcional sea cual sea el tamaño real de la
+        // carta).
         marginTopFraction: 0.09,
         gapFraction: 0.05,
         font: {
           family: "Georgia, 'Times New Roman', serif",
           weight: "bold",
-          sizePx: 40,
+          sizePx: 52,
           color: "#3d2a17",
+        },
+        // Línea fina decorativa bajo el título, centrada — marca con
+        // claridad la frontera entre título y cuerpo (ver mockup del
+        // encargo). `widthFraction` es su longitud como fracción del
+        // ancho del canvas; `color` reutiliza el mismo tono cálido que
+        // ya usa el borde del sobre (cfg.envelope.edgeColor) para
+        // mantener una paleta coherente en toda la escena.
+        separator: {
+          enabled: true,
+          widthFraction: 0.22,
+          thicknessPx: 2,
+          color: "#c9a468",
+          gapAboveFraction: 0.022,
         },
       },
     },
@@ -602,13 +638,17 @@ export const FINALE_CONFIG = {
       // (ver setAppearance() en letterMesh.js), nunca con un progreso
       // propio.
       riseDistance: 0.018,
+      // Margen superior del cuerpo (fracción de la altura del canvas)
+      // cuando la página NO tiene título — ver buildPageTexture() en
+      // letterMesh.js.
+      topMarginFraction: 0.12,
       font: {
         // Georgia: misma familia que ya usa flameWords.config.js para
         // coherencia tipográfica en todo el proyecto.
         family: "Georgia, 'Times New Roman', serif",
         weight: "normal",
-        sizePx: 46,
-        lineHeightPx: 60,
+        sizePx: 34,
+        lineHeightPx: 44,
         color: "#3d2a17",
         // Resolución del canvas oculto usado para generar la textura
         // (alto en píxeles; el ancho se calcula a partir de esto y de
@@ -616,8 +656,10 @@ export const FINALE_CONFIG = {
         // deformado, sea cual sea el tamaño real de la carta).
         canvasHeightPx: 640,
         // Fracción del ancho del canvas disponible para el ajuste de
-        // línea automático (word-wrap) antes de saltar de línea.
-        maxWidthFraction: 0.78,
+        // línea automático (word-wrap) antes de saltar de línea —
+        // también actúa como margen lateral visual (a menor fracción,
+        // mayor margen a los lados).
+        maxWidthFraction: 0.74,
         // NOTA: ya no gobierna un plano de texto aparte (antes existía
         // `textMesh`, un plano independiente más pequeño que el papel).
         // Desde esta iteración el texto se hornea directamente sobre

@@ -308,9 +308,23 @@ export function createLetterMesh(cfg, onUpdate) {
 // (si no, las zonas sin texto quedarían transparentes) — la hoja se ve
 // como papel con el texto encima, nunca como texto flotando solo.
 //
-// Sin cambios respecto a iteraciones anteriores (el encargo de esta
-// iteración es sobre CÓMO se anima la hoja, no sobre cómo se genera su
-// texto).
+// ITERACIÓN — REDISEÑO DE LA COMPOSICIÓN (ver encargo: "el texto se ve
+// demasiado grande y empieza prácticamente desde el centro de la
+// hoja... quiero una carta bien diseñada"). Dos cambios de fondo:
+//
+// 1. El título ya NO es más pequeño que el cuerpo (antes: título 40px,
+//    cuerpo 46px — al revés de lo esperado). Ahora el título es
+//    claramente mayor (ver `titleCfg.font.sizePx` en finale.config.js)
+//    y lleva un separador decorativo opcional debajo (`titleCfg.separator`)
+//    para marcar visualmente la frontera con el cuerpo.
+//
+// 2. El cuerpo ya NO se centra verticalmente en el hueco disponible
+//    (eso es lo que hacía que, sin título, "Te quiero" apareciera a
+//    mitad de la hoja): ahora se ANCLA ARRIBA, justo debajo del título
+//    (o del margen superior general, `textFontCfg.topMarginFraction`,
+//    si la página no tiene título) y fluye hacia abajo línea a línea,
+//    como una carta real — dejando el resto de la hoja en blanco por
+//    debajo, no repartido simétricamente arriba y abajo.
 // -----------------------------------------------------------------------
 function buildPageTexture(pageData, letterWidth, letterHeight, textFontCfg, titleCfg, pageColorHex) {
   const canvas = document.createElement("canvas");
@@ -328,10 +342,10 @@ function buildPageTexture(pageData, letterWidth, letterHeight, textFontCfg, titl
   ctx.fillStyle = pageColorHex;
   ctx.fillRect(0, 0, width, height);
 
-  // ---- TÍTULO (opcional, ver "TEXTO DE CADA HOJA" del encargo:
-  // centrado, arriba, con margen superior, nunca pegado al borde). ----
+  // ---- TÍTULO (opcional, centrado, con margen superior y separado
+  // con claridad del cuerpo — ver "TEXTO DE CADA HOJA" del encargo). ----
   const hasTitle = typeof pageData.title === "string" && pageData.title.trim().length > 0;
-  let bodyTop = 0;
+  let bodyTop;
   if (hasTitle) {
     const tf = titleCfg.font;
     ctx.font = `${tf.weight} ${tf.sizePx}px ${tf.family}`;
@@ -340,13 +354,35 @@ function buildPageTexture(pageData, letterWidth, letterHeight, textFontCfg, titl
     ctx.textBaseline = "middle";
     const titleY = height * titleCfg.marginTopFraction + tf.sizePx / 2;
     ctx.fillText(pageData.title, width / 2, titleY);
-    bodyTop = titleY + tf.sizePx / 2 + height * titleCfg.gapFraction;
+    let afterTitle = titleY + tf.sizePx / 2;
+
+    // Separador decorativo opcional (ver mockup del encargo: una línea
+    // fina bajo el título) — horneado en la misma textura, nunca un
+    // elemento aparte.
+    const sep = titleCfg.separator;
+    if (sep && sep.enabled) {
+      const sepY = afterTitle + height * sep.gapAboveFraction;
+      const sepHalfWidth = (width * sep.widthFraction) / 2;
+      ctx.strokeStyle = sep.color;
+      ctx.lineWidth = sep.thicknessPx;
+      ctx.beginPath();
+      ctx.moveTo(width / 2 - sepHalfWidth, sepY);
+      ctx.lineTo(width / 2 + sepHalfWidth, sepY);
+      ctx.stroke();
+      afterTitle = sepY;
+    }
+
+    bodyTop = afterTitle + height * titleCfg.gapFraction;
+  } else {
+    // Sin título: el cuerpo empieza igualmente cerca de arriba (nunca
+    // centrado en toda la hoja), con un margen superior propio.
+    bodyTop = height * textFontCfg.topMarginFraction;
   }
-  const bodyBottom = height;
 
   // ---- TEXTO (ajuste de línea automático, mismo algoritmo que ya
-  // existía). Se centra verticalmente dentro del hueco que deja el
-  // título (si lo hay), no sobre el canvas entero. ----
+  // existía). ANCLADO ARRIBA (ver cabecera de la función): la primera
+  // línea empieza justo en `bodyTop`, nunca centrado en el espacio
+  // restante. ----
   ctx.font = `${textFontCfg.weight} ${textFontCfg.sizePx}px ${textFontCfg.family}`;
   ctx.fillStyle = textFontCfg.color;
   ctx.textAlign = "center";
@@ -375,11 +411,8 @@ function buildPageTexture(pageData, letterWidth, letterHeight, textFontCfg, titl
   }
 
   const lineHeight = textFontCfg.lineHeightPx;
-  const totalHeight = lines.length * lineHeight;
-  const availableHeight = bodyBottom - bodyTop;
-  const startY = bodyTop + availableHeight / 2 - totalHeight / 2 + lineHeight / 2;
   lines.forEach((line, i) => {
-    ctx.fillText(line, width / 2, startY + i * lineHeight);
+    ctx.fillText(line, width / 2, bodyTop + lineHeight / 2 + i * lineHeight);
   });
 
   const texture = new THREE.CanvasTexture(canvas);

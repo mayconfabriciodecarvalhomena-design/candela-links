@@ -941,7 +941,33 @@ export function createCandelaFinale({ scene, camera, flame }) {
     return letter.getPageCount();
   }
 
-  return { start, isActive, getPhase, on, off, nextPage, previousPage, getCurrentPage, getPageCount };
+  function isTurning() {
+    return letter.isTurning();
+  }
+
+  return {
+    start,
+    isActive,
+    getPhase,
+    on,
+    off,
+    nextPage,
+    previousPage,
+    getCurrentPage,
+    getPageCount,
+    // ITERACIÓN — expuestos para las flechas de pasar página (ver
+    // src/letterPageControls.js: necesita saber si hay una transición
+    // en curso —para no lanzar otra ni dejar clicar mientras tanto—, y
+    // necesita la posición/tamaño REAL de la carta cada frame para
+    // colocarse junto a ella en pantalla). `letterGroup` es una
+    // referencia de SOLO LECTURA al mismo Group que ya gobierna esta
+    // máquina de estados — mismo criterio que `cat.model`/`cat.group`,
+    // ya expuestos igual desde scene.js para que catHover.js pueda
+    // proyectarlos en pantalla sin tocar cat.js.
+    isTurning,
+    isLetterReadable,
+    letterGroup: letter.group,
+  };
 }
 
 // NOTA para quien siga ampliando esto: `isActive()` ya cubre toda la

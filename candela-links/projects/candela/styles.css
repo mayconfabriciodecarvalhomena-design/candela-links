@@ -88,6 +88,63 @@ body {
 .cat-hover-label.is-visible { opacity: 1; }
 
 /* -----------------------------------------------------------------------
+   LETTER PAGE ARROWS (src/letterPageControls.js): flechas discretas
+   para pasar de página en la carta del final. Posicionadas con
+   `translate` (via JS) junto al borde izquierdo/derecho de la carta
+   real. Mismo lenguaje visual que `.cat-hover-label`/`.narrative-text`
+   (serif cálido, resplandor sutil, nada de "botón web" — sin bordes
+   rectangulares ni relleno sólido): un glifo tipográfico fino sobre un
+   halo suave, que se ilumina un poco al pasar el cursor.
+   ----------------------------------------------------------------------- */
+.letter-page-arrow {
+  position: fixed;
+  top: 0;
+  left: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(20, 14, 8, 0.22), rgba(20, 14, 8, 0) 72%);
+  appearance: none;
+
+  pointer-events: none;
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+
+  color: #f2e6d0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2rem;
+  line-height: 1;
+  user-select: none;
+  cursor: pointer;
+
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.6), 0 0 8px rgba(242, 230, 208, 0.4);
+}
+
+.letter-page-arrow.is-visible {
+  opacity: 0.7;
+  pointer-events: auto;
+}
+
+.letter-page-arrow.is-visible:hover {
+  opacity: 1;
+}
+
+/* Mientras hay una transición de página en curso (isTurning()):
+   atenuada y sin recibir clicks, para que nunca se puedan lanzar dos
+   transiciones a la vez (ver letterPageControls.js). */
+.letter-page-arrow.is-disabled {
+  opacity: 0.25 !important;
+  pointer-events: none !important;
+}
+
+/* -----------------------------------------------------------------------
    INTRO (src/intro.js): pantalla negra minimalista de entrada, creada
    dinámicamente en JS (no vive en index.html), superpuesta sobre el
    canvas mientras la escena 3D se prepara detrás.

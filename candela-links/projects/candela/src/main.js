@@ -12,6 +12,7 @@ import { sfx } from "./sfx.js";
 import { createCatHoverLabel } from "./catHover.js";
 import { createHelloKittyInspection } from "./helloKittyInspection.js";
 import { createCandelaFinale } from "./candelaFinale.js";
+import { createLetterPageControls } from "./letterPageControls.js";
 
 // -----------------------------------------------------------------------
 // ORDEN DE ARRANQUE: la intro se crea y se muestra de inmediato (es
@@ -191,6 +192,19 @@ function startScene() {
   });
 
   // -----------------------------------------------------------------------
+  // FLECHAS PARA PASAR PÁGINA DE LA CARTA (ver src/letterPageControls.js):
+  // overlay HTML aparte, con su propio listener de click sobre sus
+  // propios elementos — nunca toca renderer.domElement ni ningún
+  // raycaster existente (mismo criterio de aislamiento que
+  // catHoverLabel/helloKittyInspection/matchesController, cada uno con
+  // su propia interacción independiente sobre la misma escena). Se
+  // conecta directamente a candelaFinale.nextPage()/previousPage()/
+  // isTurning()/getCurrentPage()/getPageCount() — no crea ningún
+  // sistema de páginas paralelo.
+  // -----------------------------------------------------------------------
+  const letterPageControls = createLetterPageControls(camera, renderer, candelaFinale);
+
+  // -----------------------------------------------------------------------
   // SECUENCIA NARRATIVA DE LA VELA: la vela necesita encenderse tres veces
   // (siempre con una cerilla) antes de quedarse encendida para siempre.
   // Las dos primeras veces se apaga sola al cabo de unos segundos y
@@ -331,6 +345,13 @@ function startScene() {
   //     "done").
   //   candela.candelaFinale.isActive() — true mientras el final está en
   //     marcha (desde start() hasta llegar a "done").
+  //   candela.candelaFinale.nextPage() / .previousPage() — pasan de
+  //     página en la carta (una vez ya está en su posición final,
+  //     "final-hold"/"done" — ver isLetterReadable() en
+  //     candelaFinale.js); no hacen nada si ya hay una transición en
+  //     curso o si no hay página siguiente/anterior.
+  //   candela.candelaFinale.getCurrentPage() / .getPageCount() /
+  //     .isTurning() — estado del sistema de páginas.
   // Todos ya se crean y se añaden a la escena automáticamente desde
   // scene.js; aquí solo se exponen para inspección manual.
   Object.assign(window.candela, {
@@ -349,5 +370,6 @@ function startScene() {
     sfx,
     flameWords,
     candelaFinale,
+    letterPageControls,
   });
 }
