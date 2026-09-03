@@ -20,7 +20,7 @@ export const MUSIC_CONFIG = {
   // Si el array está vacío, la aplicación funciona sin música.
   tracks: [
     "assets/audio/cancion1.mp4",
-    "assets/audio/cancion2.wav",
-    "assets/audio/cancion3.mp3",
+    "assets/audio/cancion2.mp4",
+    "assets/audio/cancion3.mp4",
   ],
 };
