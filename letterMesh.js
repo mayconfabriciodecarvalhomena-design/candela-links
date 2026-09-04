@@ -136,7 +136,7 @@ export function createLetterMesh(cfg, onUpdate) {
     const anchor = new THREE.Group();
     group.add(anchor);
 
-    const built = buildPageTexture(
+    const { texture } = buildPageTexture(
       pageData,
       cfg.width,
       cfg.height,
@@ -161,7 +161,7 @@ export function createLetterMesh(cfg, onUpdate) {
     // se ve delante de cuál, de forma real y consistente con su
     // posición 3D en cada instante (también durante el vuelo).
     const material = new THREE.MeshStandardMaterial({
-      map: built.texture,
+      map: texture,
       roughness: cfg.roughness,
       metalness: 0.02,
       transparent: true,
@@ -175,14 +175,7 @@ export function createLetterMesh(cfg, onUpdate) {
     const mesh = new THREE.Mesh(geometry, material);
     anchor.add(mesh);
 
-    // `pageData`/`canvas`/`ctx`/`bodyTop` se conservan además de la
-    // textura (que vive en `material.map`) para que la ÚLTIMA hoja
-    // pueda ser superficie de escritura (ver setWritableDraft()/
-    // paintWritablePage() más abajo): repintar sobre el MISMO
-    // canvas/contexto ya usado en la construcción, nunca uno nuevo por
-    // pulsación de tecla — mismo criterio de "sin texturas/geometrías
-    // nuevas por frame" que el resto del archivo.
-    return { anchor, mesh, material, pageData, canvas: built.canvas, ctx: built.ctx, bodyTop: built.bodyTop };
+    return { anchor, mesh, material };
   });
 
   // Ver comentario en la creación del material, arriba: una vez que una
@@ -331,34 +324,6 @@ export function createLetterMesh(cfg, onUpdate) {
   }
 
   // -----------------------------------------------------------------------
-  // ESCRITURA EN LA ÚLTIMA HOJA (ver encargo: "última página como
-  // página de respuesta"). API mínima y aislada, mismo criterio que
-  // nextPage()/previousPage(): este módulo solo sabe REPINTAR el
-  // contenido de una hoja ya construida — decidir CUÁNDO está activo
-  // el modo escritura (última hoja + carta legible), capturar el
-  // teclado y enviar el mensaje son responsabilidad de quien llama
-  // (ver src/letterWriteControls.js), nunca de este archivo.
-  //
-  // setWritableDraft(pageIndex, text, options): repinta la MISMA
-  // textura ya usada por esa hoja (nunca crea canvas/textura nuevos)
-  // con el título intacto (nunca se mueve ni se sustituye por el
-  // borrador, ver paintWritablePage()) y el texto que se está
-  // escribiendo. Puede llamarse tan a menudo como se quiera (cada
-  // pulsación de tecla, cada parpadeo del cursor) — es solo un
-  // fillText sobre un canvas ya existente.
-  // -----------------------------------------------------------------------
-  function setWritableDraft(pageIndex, text, options) {
-    const page = pages[pageIndex];
-    if (!page) return;
-    paintWritablePage(page, cfg, text, options);
-    // La hoja se ha repintado en su propio canvas 2D (ver
-    // paintWritablePage()): hay que avisar a three.js de que vuelva a
-    // subir ese canvas a la GPU (`needsUpdate`), o lo escrito se
-    // quedaría en el canvas y nunca se vería sobre la hoja.
-    page.material.map.needsUpdate = true;
-  }
-
-  // -----------------------------------------------------------------------
   // reset(): re-arma la carta entera para un nuevo pase de la secuencia
   // (llamado desde candelaFinale.js → start()). Vuelve siempre a la
   // hoja 1 arriba, en el orden original. Deshace también lockOpaque()
@@ -387,17 +352,6 @@ export function createLetterMesh(cfg, onUpdate) {
       page.material.needsUpdate = true;
     });
     applyRestLayout();
-
-    // Re-arma también la superficie de escritura (ver setWritableDraft()/
-    // paintWritablePage() más abajo): si el final se repite
-    // (candelaFinale.start() llamado de nuevo), la última hoja vuelve a
-    // su estado inicial (vacía, con el placeholder) en vez de conservar
-    // un borrador de una vuelta anterior.
-    if (cfg.write && cfg.write.enabled && pages.length > 0) {
-      const lastPage = pages[pages.length - 1];
-      paintWritablePage(lastPage, cfg, "", { showCursor: false });
-      lastPage.material.map.needsUpdate = true;
-    }
 
     setAppearance(0);
   }
@@ -553,7 +507,6 @@ export function createLetterMesh(cfg, onUpdate) {
     getCurrentPage,
     getPageCount,
     isTurning,
-    setWritableDraft,
   };
 }
 
@@ -649,14 +602,45 @@ function buildPageTexture(pageData, letterWidth, letterHeight, textFontCfg, titl
   canvas.width = width;
   canvas.height = height;
 
-  paintPageBackground(ctx, width, height, pageColorHex);
+  // Fondo opaco: mismo color que el resto del papel de la carta
+  // (`cfg.color`, ver createLetterMesh) para que la textura completa
+  // se lea como papel con el texto encima, nunca como texto flotando
+  // solo con huecos transparentes alrededor.
+  ctx.fillStyle = pageColorHex;
+  ctx.fillRect(0, 0, width, height);
 
   // ---- TÍTULO (opcional, centrado, con margen superior y separado
-  // con claridad del cuerpo — ver "TEXTO DE CADA HOJA" del encargo).
-  // paintTitle() dibuja el título (o devuelve `null` si no hay) y el
-  // `bodyTop` resultante: el punto donde empieza el cuerpo. ----
-  let bodyTop = paintTitle(ctx, pageData.title, width, height, titleCfg);
-  if (bodyTop == null) {
+  // con claridad del cuerpo — ver "TEXTO DE CADA HOJA" del encargo). ----
+  const hasTitle = typeof pageData.title === "string" && pageData.title.trim().length > 0;
+  let bodyTop;
+  if (hasTitle) {
+    const tf = titleCfg.font;
+    ctx.font = `${tf.weight} ${tf.sizePx}px ${tf.family}`;
+    ctx.fillStyle = tf.color;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const titleY = height * titleCfg.marginTopFraction + tf.sizePx / 2;
+    ctx.fillText(pageData.title, width / 2, titleY);
+    let afterTitle = titleY + tf.sizePx / 2;
+
+    // Separador decorativo opcional (ver mockup del encargo: una línea
+    // fina bajo el título) — horneado en la misma textura, nunca un
+    // elemento aparte.
+    const sep = titleCfg.separator;
+    if (sep && sep.enabled) {
+      const sepY = afterTitle + height * sep.gapAboveFraction;
+      const sepHalfWidth = (width * sep.widthFraction) / 2;
+      ctx.strokeStyle = sep.color;
+      ctx.lineWidth = sep.thicknessPx;
+      ctx.beginPath();
+      ctx.moveTo(width / 2 - sepHalfWidth, sepY);
+      ctx.lineTo(width / 2 + sepHalfWidth, sepY);
+      ctx.stroke();
+      afterTitle = sepY;
+    }
+
+    bodyTop = afterTitle + height * titleCfg.gapFraction;
+  } else {
     // Sin título: el cuerpo empieza igualmente cerca de arriba (nunca
     // centrado en toda la hoja), con un margen superior propio.
     bodyTop = height * textFontCfg.topMarginFraction;
@@ -666,79 +650,13 @@ function buildPageTexture(pageData, letterWidth, letterHeight, textFontCfg, titl
   // existía). ANCLADO ARRIBA (ver cabecera de la función): la primera
   // línea empieza justo en `bodyTop`, nunca centrado en el espacio
   // restante. ----
-  const maxWidth = width * textFontCfg.maxWidthFraction;
-  const font = `${textFontCfg.weight} ${textFontCfg.sizePx}px ${textFontCfg.family}`;
-  const lines = wrapLines(ctx, pageData.text, maxWidth, font);
-  paintBodyLines(ctx, lines, width, bodyTop, textFontCfg);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  // `canvas`/`ctx`/`bodyTop` se devuelven además de la textura para que
-  // la ÚLTIMA hoja pueda repintarse en directo mientras el usuario
-  // escribe (ver setWritableDraft()/paintWritablePage() más abajo) —
-  // repintar SIEMPRE sobre este mismo canvas, nunca crear uno nuevo.
-  return { texture, canvas, ctx, bodyTop, aspect: width / height };
-}
-
-// -----------------------------------------------------------------------
-// paintPageBackground/paintTitle/wrapLines/paintBodyLines: piezas
-// reutilizables extraídas de buildPageTexture() (sin cambio de
-// comportamiento) para que la ÚLTIMA hoja pueda repintarse en directo
-// mientras el usuario escribe (ver paintWritablePage() más abajo) con
-// EXACTAMENTE el mismo título/fondo/ajuste de línea que ya usan las
-// demás hojas — nunca una segunda implementación paralela que pudiera
-// desincronizarse en tamaño, color o tipografía.
-// -----------------------------------------------------------------------
-function paintPageBackground(ctx, width, height, pageColorHex) {
-  // Fondo opaco: mismo color que el resto del papel de la carta
-  // (`cfg.color`, ver createLetterMesh) para que la textura completa
-  // se lea como papel con el texto encima, nunca como texto flotando
-  // solo con huecos transparentes alrededor.
-  ctx.fillStyle = pageColorHex;
-  ctx.fillRect(0, 0, width, height);
-}
-
-// Pinta el título (si lo hay) y devuelve el `bodyTop` resultante — o
-// `null` si la página no tiene título (el llamante decide entonces el
-// margen superior general, ver `textFontCfg.topMarginFraction`).
-function paintTitle(ctx, title, width, height, titleCfg) {
-  const hasTitle = typeof title === "string" && title.trim().length > 0;
-  if (!hasTitle) return null;
-
-  const tf = titleCfg.font;
-  ctx.font = `${tf.weight} ${tf.sizePx}px ${tf.family}`;
-  ctx.fillStyle = tf.color;
+  ctx.font = `${textFontCfg.weight} ${textFontCfg.sizePx}px ${textFontCfg.family}`;
+  ctx.fillStyle = textFontCfg.color;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const titleY = height * titleCfg.marginTopFraction + tf.sizePx / 2;
-  ctx.fillText(title, width / 2, titleY);
-  let afterTitle = titleY + tf.sizePx / 2;
 
-  // Separador decorativo opcional (ver mockup del encargo: una línea
-  // fina bajo el título) — horneado en la misma textura, nunca un
-  // elemento aparte.
-  const sep = titleCfg.separator;
-  if (sep && sep.enabled) {
-    const sepY = afterTitle + height * sep.gapAboveFraction;
-    const sepHalfWidth = (width * sep.widthFraction) / 2;
-    ctx.strokeStyle = sep.color;
-    ctx.lineWidth = sep.thicknessPx;
-    ctx.beginPath();
-    ctx.moveTo(width / 2 - sepHalfWidth, sepY);
-    ctx.lineTo(width / 2 + sepHalfWidth, sepY);
-    ctx.stroke();
-    afterTitle = sepY;
-  }
-
-  return afterTitle + height * titleCfg.gapFraction;
-}
-
-// Ajuste de línea automático (word-wrap) + saltos manuales vía "\n" —
-// mismo algoritmo que ya existía en buildPageTexture(), ahora
-// compartido con paintWritablePage().
-function wrapLines(ctx, text, maxWidth, font) {
-  ctx.font = font;
-  const paragraphs = String(text || "").split("\n");
+  const maxWidth = width * textFontCfg.maxWidthFraction;
+  const paragraphs = String(pageData.text || "").split("\n");
   const lines = [];
   for (const paragraph of paragraphs) {
     const words = paragraph.split(" ").filter(Boolean);
@@ -758,97 +676,15 @@ function wrapLines(ctx, text, maxWidth, font) {
     }
     lines.push(current);
   }
-  return lines;
-}
 
-function paintBodyLines(ctx, lines, width, bodyTop, textFontCfg) {
-  ctx.font = `${textFontCfg.weight} ${textFontCfg.sizePx}px ${textFontCfg.family}`;
-  ctx.fillStyle = textFontCfg.color;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
   const lineHeight = textFontCfg.lineHeightPx;
   lines.forEach((line, i) => {
     ctx.fillText(line, width / 2, bodyTop + lineHeight / 2 + i * lineHeight);
   });
-}
 
-// Versión con alpha de un color hexadecimal ("#3d2a17" -> "rgba(...)")
-// — usada solo para el placeholder de la hoja de escritura (ver
-// paintWritablePage()), atenuado respecto al color real del texto de
-// la carta, nunca un color inventado aparte.
-function withAlpha(hexColor, alpha) {
-  const c = new THREE.Color(hexColor);
-  return `rgba(${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)}, ${alpha})`;
-}
-
-// -----------------------------------------------------------------------
-// paintWritablePage: repinta la textura de la ÚLTIMA hoja mientras el
-// usuario escribe (ver setWritableDraft() más arriba). Reutiliza
-// EXACTAMENTE las mismas piezas que buildPageTexture() (fondo, título,
-// ajuste de línea, tipografía) — así el texto que se escribe se ve
-// indistinguible del resto de la carta, nunca un campo de formulario
-// aparte.
-//
-// El TÍTULO se repinta en su posición original en cada llamada (nunca
-// se mueve ni se convierte en placeholder del campo — ver "EL TÍTULO
-// DE LA ÚLTIMA PÁGINA" del encargo): usa el `pageData.title` que ya
-// tenía la hoja desde su construcción, la MISMA fuente de verdad que
-// `cfg.pages` en finale.config.js.
-//
-// MENSAJES LARGOS (ver "MENSAJES MUY LARGOS" del encargo): la hoja
-// NUNCA crece. Si el texto envuelto ocupa más líneas de las que caben
-// en el hueco disponible (canvas.height - bodyTop - margen inferior),
-// se recortan las líneas MÁS ANTIGUAS y se muestran solo las últimas
-// — un desplazamiento interno "hacia arriba" sin scrollbar visible,
-// mostrando siempre la parte más reciente de lo que se está
-// escribiendo.
-// -----------------------------------------------------------------------
-function paintWritablePage(page, cfg, text, options) {
-  const { canvas, ctx, bodyTop, pageData } = page;
-  const width = canvas.width;
-  const height = canvas.height;
-  const writeCfg = cfg.write || {};
-  const textFontCfg = cfg.text.font;
-  const showCursor = Boolean(options && options.showCursor);
-
-  const paperColorHex = `#${new THREE.Color(cfg.color).getHexString()}`;
-  paintPageBackground(ctx, width, height, paperColorHex);
-
-  // Título: repintado en la MISMA posición que en la construcción
-  // original (mismo `pageData.title`, nunca sustituido por el
-  // borrador) — ver cabecera de la función.
-  paintTitle(ctx, pageData.title, width, height, cfg.page.title);
-
-  const trimmed = String(text || "");
-  const cursorChar = writeCfg.cursor && writeCfg.cursor.enabled && showCursor ? writeCfg.cursor.char || "|" : "";
-
-  if (!trimmed && !cursorChar && writeCfg.placeholder) {
-    // Vacío y sin foco (sin cursor parpadeando): se muestra el
-    // placeholder, atenuado y en cursiva — nunca como si ya fuera
-    // parte del mensaje enviado.
-    ctx.font = `italic ${textFontCfg.weight} ${textFontCfg.sizePx}px ${textFontCfg.family}`;
-    ctx.fillStyle = withAlpha(textFontCfg.color, 0.45);
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(writeCfg.placeholder, width / 2, bodyTop + textFontCfg.lineHeightPx / 2);
-    return;
-  }
-
-  const maxWidth = width * textFontCfg.maxWidthFraction;
-  const font = `${textFontCfg.weight} ${textFontCfg.sizePx}px ${textFontCfg.family}`;
-  let lines = wrapLines(ctx, trimmed + cursorChar, maxWidth, font);
-
-  const lineHeight = textFontCfg.lineHeightPx;
-  const bottomMargin = height * (writeCfg.bottomMarginFraction != null ? writeCfg.bottomMarginFraction : 0.08);
-  const availableHeight = Math.max(lineHeight, height - bodyTop - bottomMargin);
-  const maxLines = Math.max(1, Math.floor(availableHeight / lineHeight));
-  if (lines.length > maxLines) {
-    // Recorte de cola: se conservan las últimas `maxLines` líneas
-    // (lo más reciente escrito), nunca las primeras — ver cabecera.
-    lines = lines.slice(lines.length - maxLines);
-  }
-
-  paintBodyLines(ctx, lines, width, bodyTop, textFontCfg);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return { texture, aspect: width / height };
 }
 
 function clamp01(v) {

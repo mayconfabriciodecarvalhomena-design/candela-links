@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Candela</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="message-widget.css" />
- 
+
   <!-- Three.js vía CDN + import map, sin bundler -->
   <script type="importmap">
   {
@@ -20,18 +19,15 @@
 <body>
   <div id="app"></div>
 
-  <!-- Widget de mensaje: independiente de main.js, no interfiere con Candela -->
-  <div id="message-box" class="hidden">
-    <button id="message-toggle" aria-label="Escribir un mensaje">✍️</button>
-    <div id="message-panel" class="hidden">
-      <textarea id="message-text" maxlength="2000" placeholder="Escribe algo…"></textarea>
-      <button id="message-send">Enviar</button>
-      <div id="message-status"></div>
-    </div>
-  </div>
+  <!-- El envío de mensajes ya no vive en un widget flotante aparte:
+       está integrado en la última página de la carta (ver
+       src/letterWriteControls.js), con sus propios elementos DOM
+       creados dinámicamente por JS — igual criterio que las flechas de
+       pasar página (src/letterPageControls.js) o la etiqueta del gato
+       (src/catHover.js), ninguna de las cuales vive tampoco en este
+       HTML. -->
 
   <script type="module" src="src/main.js"></script>
-  <script type="module" src="message-widget.js"></script>
 </body>
 </html>
  

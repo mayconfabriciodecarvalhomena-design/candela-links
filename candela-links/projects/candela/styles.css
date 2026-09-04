@@ -149,6 +149,114 @@ body {
 }
 
 /* -----------------------------------------------------------------------
+   LETTER WRITE CONTROLS (src/letterWriteControls.js): convierte la
+   última hoja de la carta en una superficie de escritura real (ver
+   letterMesh.js → paintWritablePage(), donde se hornea el propio
+   texto sobre la textura de la hoja). Estos tres elementos son
+   deliberadamente invisibles como "formulario web" — solo existen para
+   capturar teclado/click y para mostrar una confirmación discreta;
+   NUNCA se ven como caja, borde, fondo o textarea de navegador.
+   ----------------------------------------------------------------------- */
+
+/* Captura de teclado: un <textarea> real (necesario para el teclado
+   táctil en móvil y para que el navegador gestione selección/IME con
+   normalidad) pero completamente transparente — sin fondo, sin borde,
+   sin caret propio, sin scrollbar visible. Lo único que el usuario ve
+   es el texto horneado sobre la propia hoja. */
+.letter-write-input {
+  position: fixed;
+  top: 0;
+  left: 0;
+  margin: 0;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  opacity: 0;
+  padding: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 9999;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.letter-write-input.is-active {
+  pointer-events: auto;
+}
+
+/* Botón "Enviar": discreto, mismo lenguaje tipográfico que el resto de
+   la carta — nunca un botón moderno de aplicación web (sin relleno
+   sólido, sin borde rectangular). */
+.letter-write-send {
+  position: fixed;
+  top: 0;
+  left: 0;
+  transform: translate(-100%, -100%);
+  margin: 0;
+  padding: 0.3em 0.9em;
+  border: none;
+  background: transparent;
+  appearance: none;
+  color: #6b4a26;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease, color 0.2s ease, transform 0.2s ease;
+  z-index: 10000;
+}
+
+.letter-write-send.is-active {
+  opacity: 0.7;
+  pointer-events: auto;
+}
+
+.letter-write-send.is-active:hover {
+  opacity: 1;
+  color: #4a3117;
+}
+
+.letter-write-send:disabled {
+  opacity: 0.3 !important;
+  pointer-events: none;
+  cursor: default;
+}
+
+/* Estado de envío ("Enviando…" / "Enviado ✓" / error): mismo lenguaje
+   visual que .narrative-text/.cat-hover-label — nunca un alert o modal
+   del navegador. */
+.letter-write-status {
+  position: fixed;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, 0);
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
+  color: #6b4a26;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  z-index: 10000;
+  white-space: nowrap;
+}
+
+.letter-write-status.is-visible {
+  opacity: 0.85;
+}
+
+.letter-write-status.is-error {
+  color: #8a3b2e;
+}
+
+/* -----------------------------------------------------------------------
    INTRO (src/intro.js): pantalla negra minimalista de entrada, creada
    dinámicamente en JS (no vive en index.html), superpuesta sobre el
    canvas mientras la escena 3D se prepara detrás.

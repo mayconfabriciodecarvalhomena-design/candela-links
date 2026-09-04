@@ -13,6 +13,7 @@ import { createCatHoverLabel } from "./catHover.js";
 import { createHelloKittyInspection } from "./helloKittyInspection.js";
 import { createCandelaFinale } from "./candelaFinale.js";
 import { createLetterPageControls } from "./letterPageControls.js";
+import { createLetterWriteControls } from "./letterWriteControls.js";
 
 // -----------------------------------------------------------------------
 // ORDEN DE ARRANQUE: la intro se crea y se muestra de inmediato (es
@@ -205,6 +206,17 @@ function startScene() {
   const letterPageControls = createLetterPageControls(camera, renderer, candelaFinale);
 
   // -----------------------------------------------------------------------
+  // ESCRITURA EN LA ÚLTIMA PÁGINA DE LA CARTA (ver src/letterWriteControls.js):
+  // overlay DOM propio (textarea invisible + botón "Enviar" + estado),
+  // mismo criterio de aislamiento que letterPageControls justo arriba —
+  // nunca toca renderer.domElement ni ningún raycaster existente. Se
+  // conecta directamente a candelaFinale (getPageCount()/getCurrentPage()/
+  // isLetterReadable()/isTurning()/setPageDraft()), no crea ningún
+  // sistema paralelo.
+  // -----------------------------------------------------------------------
+  const letterWriteControls = createLetterWriteControls(camera, renderer, candelaFinale);
+
+  // -----------------------------------------------------------------------
   // SECUENCIA NARRATIVA DE LA VELA: la vela necesita encenderse tres veces
   // (siempre con una cerilla) antes de quedarse encendida para siempre.
   // Las dos primeras veces se apaga sola al cabo de unos segundos y
@@ -371,5 +383,6 @@ function startScene() {
     flameWords,
     candelaFinale,
     letterPageControls,
+    letterWriteControls,
   });
 }

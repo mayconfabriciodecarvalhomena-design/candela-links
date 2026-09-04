@@ -160,6 +160,11 @@ export function createCandelaFinale({ scene, camera, flame }) {
     // pasa la configuración tal cual a letterMesh.js.
     pages: cfg.letter.pages,
     page: cfg.letter.page,
+    // Sistema de escritura de la última hoja (ver encargo "ESCRITURA EN
+    // LA ÚLTIMA HOJA" y finale.config.js → cfg.letter.write): se pasa
+    // tal cual a letterMesh.js (que lo usa para repintar la última hoja
+    // con el borrador, ver setWritableDraft()/paintWritablePage()).
+    write: cfg.letter.write,
   };
   const letter = createLetterMesh(letterMeshCfg, onUpdate);
   scene.add(letter.group);
@@ -945,6 +950,19 @@ export function createCandelaFinale({ scene, camera, flame }) {
     return letter.isTurning();
   }
 
+  // -----------------------------------------------------------------------
+  // setPageDraft(text, options): superficie de escritura de la hoja
+  // ACTUAL (ver src/letterWriteControls.js, que la llama cuando la
+  // última hoja está activa). Delega en letter.setWritableDraft() — la
+  // única fuente de verdad de la página actual es `letter.getCurrentPage()`,
+  // nunca un índice hardcodeado aquí (ver "MUY IMPORTANTE SOBRE LA
+  // ÚLTIMA PÁGINA": la lógica siempre es `currentPage === pageCount-1`,
+  // calculada por el llamante a través de getCurrentPage()/getPageCount()).
+  // -----------------------------------------------------------------------
+  function setPageDraft(text, options) {
+    letter.setWritableDraft(letter.getCurrentPage(), text, options);
+  }
+
   return {
     start,
     isActive,
@@ -966,6 +984,7 @@ export function createCandelaFinale({ scene, camera, flame }) {
     // proyectarlos en pantalla sin tocar cat.js.
     isTurning,
     isLetterReadable,
+    setPageDraft,
     letterGroup: letter.group,
   };
 }

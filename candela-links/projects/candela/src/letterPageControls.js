@@ -25,7 +25,10 @@ import { onUpdate } from "./scene.js";
 // isLetterReadable(): FINAL_HOLD o DONE — la carta ya llegó a su
 // posición final y dejó de moverse) y solo la que tenga sentido según
 // la página actual (getCurrentPage()/getPageCount()): en la primera
-// página no aparece "anterior"; en la última, no aparece "siguiente".
+// hoja no aparece "anterior"; en la última, no aparece "siguiente" —
+// navegación ACOTADA, sin bucle (ver letterMesh.js: la pila tiene un
+// principio y un final reales, `nextPage()`/`previousPage()` ya se
+// bloquean solos en esos límites, esto solo refleja lo mismo en la UI).
 // Mientras haya una transición en curso (isTurning()) ambas quedan
 // deshabilitadas (atenuadas, sin recibir clicks) para que nunca se
 // puedan lanzar dos transiciones a la vez.
@@ -108,6 +111,9 @@ export function createLetterPageControls(camera, renderer, candelaFinale) {
     anchorLeft.set(box.min.x - EDGE_MARGIN, centerY, centerZ);
     anchorRight.set(box.max.x + EDGE_MARGIN, centerY, centerZ);
 
+    // Navegación acotada, sin bucle (ver cabecera del archivo): cada
+    // flecha se muestra solo si de verdad hay una hoja anterior/
+    // siguiente hacia la que ir.
     const currentPage = candelaFinale.getCurrentPage();
     const pageCount = candelaFinale.getPageCount();
     const hasPrev = currentPage > 0;

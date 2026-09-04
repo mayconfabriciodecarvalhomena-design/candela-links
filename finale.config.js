@@ -530,22 +530,12 @@ export const FINALE_CONFIG = {
     // ya existía ("Te quiero", antes en `message.text` de arriba) para
     // no cambiar el comportamiento visible si nadie añade más hojas.
     // -----------------------------------------------------------------------
-    // ITERACIÓN — ÚLTIMA HOJA COMO PÁGINA DE RESPUESTA (ver encargo:
-    // "integrar completamente la escritura dentro de la última página
-    // de la carta"). La última entrada de este array sigue siendo la
-    // única fuente de verdad de su TÍTULO (se pinta exactamente igual
-    // que el de cualquier otra hoja, ver letterMesh.js →
-    // buildPageTexture()/paintTitle()); su `text` queda vacío a
-    // propósito porque el cuerpo de esa hoja concreta lo gobierna
-    // desde ahora el borrador del usuario (ver `write` más abajo y
-    // letterMesh.js → setWritableDraft()/paintWritablePage()), nunca
-    // un texto estático.
     pages: [
       { title: "Hoja 1", text: "Texto de la hoja 1" },
       { title: "Hoja 2", text: "Texto de la hoja 2" },
       { title: "Hoja 3", text: "Texto de la hoja 3" },
       { title: "Hoja 4", text: "Texto de la hoja 4" },
-      { title: "Ahora escribe tú...", text: "" },
+      { title: "Hoja 5", text: "Texto de la hoja 5" },
     ],
 
     // -----------------------------------------------------------------------
@@ -674,76 +664,6 @@ export const FINALE_CONFIG = {
           color: "#c9a468",
           gapAboveFraction: 0.022,
         },
-      },
-    },
-
-    // -----------------------------------------------------------------------
-    // ESCRITURA EN LA ÚLTIMA HOJA (ver encargo: "quiero integrar
-    // completamente la escritura dentro de la última página de la
-    // carta"). `enabled: true` convierte la hoja en la ranura
-    // `pages.length - 1` (NUNCA un índice distinto/hardcodeado aparte
-    // — ver letterWriteControls.js, que lo calcula siempre a partir de
-    // `getPageCount()`) en una superficie de escritura real en cuanto
-    // es la hoja actual y la carta ya es legible (candelaFinale.
-    // isLetterReadable()). Toda la lógica de detección/captura de
-    // teclado/envío vive en src/letterWriteControls.js — esta sección
-    // es solo configuración de apariencia y comportamiento, mismo
-    // criterio que `page`/`text` de arriba.
-    // -----------------------------------------------------------------------
-    write: {
-      enabled: true,
-
-      // Texto atenuado que se muestra en el cuerpo de la hoja mientras
-      // no se ha escrito nada (ver "EL TÍTULO DE LA ÚLTIMA PÁGINA" del
-      // encargo: el título NUNCA hace de placeholder, así que este
-      // placeholder es un texto de cuerpo aparte, en cursiva y con
-      // menos opacidad — ver letterMesh.js → paintWritablePage()).
-      placeholder: "Escribe aquí, como si esta hoja fuera tuya…",
-
-      // Límite de longitud del mensaje — igual que MAX_LEN en
-      // api/message.js (ver ese archivo): se valida también aquí para
-      // dar feedback inmediato en el propio `<textarea>` de captura
-      // (ver letterWriteControls.js), pero el backend sigue siendo la
-      // única fuente de verdad real de la validación.
-      maxLength: 2000,
-
-      // Margen inferior reservado en el cuerpo de la hoja (fracción de
-      // `text.font.canvasHeightPx`, mismo criterio que
-      // `text.topMarginFraction`) — junto con `bodyTop` (calculado a
-      // partir del título, ver letterMesh.js) determina cuántas líneas
-      // caben antes de empezar a recortar por arriba (ver "MENSAJES
-      // MUY LARGOS" del encargo: la hoja nunca crece, se muestra
-      // siempre la parte más reciente de lo escrito).
-      bottomMarginFraction: 0.08,
-
-      // Cursor parpadeante mientras el campo tiene el foco (ver
-      // letterWriteControls.js) — refuerza la sensación de estar
-      // escribiendo de verdad sobre el papel, no solo viendo un
-      // resultado estático.
-      cursor: {
-        enabled: true,
-        blinkMs: 530,
-        char: "|",
-      },
-
-      // Endpoint YA existente (ver api/message.js) — se reutiliza tal
-      // cual, mismo payload { slug, content } que ya usaba el widget
-      // flotante retirado (message-widget.js). Nunca un endpoint
-      // nuevo.
-      endpoint: "/api/message",
-
-      button: {
-        label: "Enviar",
-        sendingLabel: "Enviando…",
-      },
-
-      status: {
-        sentLabel: "Enviado ✓",
-        errorLabel: "No se pudo enviar. Inténtalo de nuevo.",
-        // Cuánto tiempo se mantiene visible la confirmación antes de
-        // desvanecerse sola (ver letterWriteControls.js) — igual
-        // criterio temporal que ya usaba el widget flotante retirado.
-        sentHoldMs: 2500,
       },
     },
 
