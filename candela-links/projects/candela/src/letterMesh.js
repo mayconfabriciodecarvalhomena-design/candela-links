@@ -23,16 +23,48 @@ import * as THREE from "three";
 // desde el sobre hasta su posición final (más un fundido de opacidad),
 // con la hoja ya a su tamaño/forma definitivos en todo momento.
 //
+// ITERACIÓN — PILA DE HOJAS SUELTAS (se abandona el pivote de libro).
+// El encargo es explícito: "no quiero que parezcan un libro… son hojas
+// de papel sueltas apiladas". El sistema anterior giraba cada hoja
+// -180° sobre un pivote (`hinge`) fijo en su borde izquierdo — un
+// mecanismo de lomo encuadernado. Aquí se sustituye por completo:
+//
+//   - Cada hoja tiene una RANURA (slot) de profundidad fija dentro de
+//     la pila (0 = arriba del todo/la que se lee, N-1 = la más al
+//     fondo). El array `order` es la única fuente de verdad de qué
+//     hoja física ocupa cada ranura — nunca se infiere de índices fijos.
+//   - `nextPage()` saca la hoja de la ranura 0 y la reinserta al fondo
+//     (ranura N-1); `previousPage()` hace lo inverso: saca la hoja del
+//     fondo y la reinserta arriba. El resto de hojas NO se mueve (sus
+//     huecos de profundidad son imperceptibles — `stackSpacing` — así
+//     que no hace falta animarlas, solo reasignarles su nueva ranura al
+//     terminar la transición).
+//   - La hoja que se mueve sigue una curva de Bézier cúbica en el
+//     espacio (posición) más una inclinación temporal (rotación) — ver
+//     `updatePageTurn()` más abajo — que la separa de la pila hacia la
+//     cámara, la eleva por ENCIMA del borde superior de la carta y la
+//     lleva por detrás de la posición final antes de posarla: en
+//     ningún momento su trayectoria cruza el volumen de las demás
+//     hojas. Nunca es una rotación sobre un eje fijo.
+//
 // La carta es un Group con:
 //   - `pages` → un plano físico INDEPENDIENTE por cada entrada de
 //     `cfg.pages` (nunca hardcodeado — ver finale.config.js), cada uno
-//     con un pivote vertical en el borde izquierdo (`hinge`) para
-//     pasar de página (nextPage()/previousPage() más abajo) — mismo
-//     lenguaje que `flapPivot` en envelopeMesh.js: rotar el pivote,
-//     nunca la geometría. El sistema de pasar página NO ha cambiado en
-//     esta iteración (el encargo pedía eliminar el doblado, no el paso
-//     de página, que es un mecanismo distinto: gira la hoja entera
-//     alrededor de su lomo, no la divide en dos).
+//     dentro de su propio `anchor` (Group) que controla su posición y
+//     rotación en la pila — mismo lenguaje que `flapPivot` en
+//     envelopeMesh.js: se anima el grupo contenedor, nunca la
+//     geometría.
+//
+// NAVEGACIÓN LINEAL (NO circular): a diferencia de la versión de
+// Claude, la lectura respeta el orden normal 1 → 2 → 3 → 4 → 5 y su
+// inverso, SIN carrusel infinito. `nextPage()` se bloquea cuando la
+// hoja leída es la última del conjunto (order[0] === pages.length-1);
+// `previousPage()` se bloquea cuando es la primera (order[0] === 0).
+// El vuelo físico de la hoja (arco de Bézier + inclinación) es
+// exactamente el sistema de pila de Claude — solo se añade el guardado
+// de límites para que la hoja 1 y la hoja 5 no estén conectadas en
+// bucle (ver letterPageControls.js, que oculta/desactiva las flechas
+// en esos límites).
 //
 // El texto de cada hoja NUNCA es HTML/DOM: se hornea directamente en
 // una textura de canvas 2D oculto (mismo patrón que
@@ -57,47 +89,44 @@ export function createLetterMesh(cfg, onUpdate) {
   group.visible = false;
 
   const paperColor = new THREE.Color(cfg.color);
-  const halfW = cfg.width / 2;
 
   // -----------------------------------------------------------------------
   // SISTEMA DE HOJAS (ver "OBJETIVO 2 — SISTEMA REAL DE PASAR HOJAS" del
-  // encargo original). Una hoja física independiente por cada entrada
-  // de `cfg.pages` — el número de hojas NUNCA está hardcodeado, sale de
+  // encargo original + ITERACIÓN "PILA DE HOJAS SUELTAS" en la cabecera
+  // del archivo). Una hoja física independiente por cada entrada de
+  // `cfg.pages` — el número de hojas NUNCA está hardcodeado, sale de
   // `cfg.pages.length`. Cada hoja se crea UNA vez aquí (nunca por frame
   // — ver "RENDIMIENTO" del encargo: sin geometrías/texturas nuevas por
   // frame, sin recrear hojas continuamente).
   //
   // Cada hoja es una ÚNICA malla completa (cfg.width × cfg.height, sin
-  // divisiones ni pivotes de pliegue — ver cabecera del archivo).
-  // Apiladas con una separación en Z minúscula (`cfg.page.stackSpacing`,
-  // solo para evitar z-fighting entre páginas distintas — NO cambia el
-  // tamaño ni la posición general de la carta): la primera hoja
-  // (índice 0) queda la más "delante" (más cerca de cámara), las
-  // siguientes progresivamente detrás — igual que en un cuaderno real.
+  // divisiones ni pivotes de pliegue), envuelta en un `anchor` (Group)
+  // que es lo único que se anima: posición (X/Y/Z) y rotación durante
+  // el vuelo, nunca la geometría — ver updatePageTurn() más abajo.
   // -----------------------------------------------------------------------
   const pageContents = Array.isArray(cfg.pages) && cfg.pages.length > 0 ? cfg.pages : [{ text: "" }];
   const pageCfg = cfg.page;
+  const pageCount = pageContents.length;
 
-  const pages = pageContents.map((pageData, index) => {
-    // Pivote de PASAR PÁGINA (borde izquierdo, eje Y) — ver
-    // nextPage()/previousPage() más abajo. Sin cambios respecto a
-    // iteraciones anteriores: es un mecanismo totalmente independiente
-    // del (ya eliminado) doblado.
-    const hinge = new THREE.Group();
-    hinge.position.set(-halfW, 0, 0.0012 + (pageContents.length - 1 - index) * pageCfg.stackSpacing);
-    group.add(hinge);
+  // Profundidad Z de la ranura `slot` dentro de la pila (0 = arriba del
+  // todo/la que se lee, pageCount-1 = la más al fondo). Separación
+  // minúscula (`stackSpacing`) solo para evitar z-fighting entre planos
+  // casi coplanares — nunca para cambiar el tamaño/posición general de
+  // la carta. Se usa tanto para el reposo como para los extremos del
+  // vuelo (ver updatePageTurn()).
+  function slotDepth(slot) {
+    return 0.0012 + (pageCount - 1 - slot) * pageCfg.stackSpacing;
+  }
 
-    // Marco de la página dentro de su propio pivote de pasar página:
-    // centrado en (halfW, 0, 0) — el centro real de la hoja, ya que el
-    // pivote de pasar página vive en su borde izquierdo (x=0 del
-    // pivote = borde izquierdo de la hoja, x=width = borde derecho).
-    // Se conserva como grupo propio (en vez de aplicar la malla
-    // directamente sobre `hinge`) únicamente para poder desplazarla
-    // ligeramente durante el fundido de aparición — ver
-    // setAppearance() más abajo.
-    const pageFrame = new THREE.Group();
-    pageFrame.position.set(halfW, 0, 0);
-    hinge.add(pageFrame);
+  const pages = pageContents.map((pageData) => {
+    // Ancla física de la hoja dentro de la pila: sustituye por completo
+    // al antiguo pivote de lomo (`hinge`) — ver cabecera del archivo.
+    // La malla ya está centrada en su propio origen (PlaneGeometry sin
+    // trasladar), así que el `anchor` coincide exactamente con el
+    // centro de la hoja: mover/rotar el anchor mueve/rota la hoja
+    // entera como un cuerpo rígido.
+    const anchor = new THREE.Group();
+    group.add(anchor);
 
     const { texture } = buildPageTexture(
       pageData,
@@ -108,10 +137,6 @@ export function createLetterMesh(cfg, onUpdate) {
       `#${paperColor.getHexString()}`
     );
 
-    // Malla ÚNICA y completa: ya centrada en el origen de `pageFrame`
-    // por defecto (PlaneGeometry sin trasladar), así que coincide
-    // exactamente con el centro de la hoja — sin necesidad de ningún
-    // `translate()` adicional.
     const geometry = new THREE.PlaneGeometry(cfg.width, cfg.height);
     const material = new THREE.MeshStandardMaterial({
       map: texture,
@@ -119,81 +144,114 @@ export function createLetterMesh(cfg, onUpdate) {
       metalness: 0.02,
       transparent: true,
       opacity: 0,
-      // DoubleSide: la hoja puede girar hasta 180° al pasar de página
-      // (ver nextPage()/previousPage() más abajo) — con una sola cara
-      // (FrontSide) desaparecería a mitad de ese giro en vez de
-      // mostrar su reverso.
+      // DoubleSide: durante el vuelo la hoja se inclina (ver
+      // updatePageTurn()) y podría asomar brevemente su reverso —
+      // con FrontSide se vería "agujereada" en ese instante.
       side: THREE.DoubleSide,
       depthWrite: false,
     });
     const mesh = new THREE.Mesh(geometry, material);
-    pageFrame.add(mesh);
+    mesh.renderOrder = 0;
+    anchor.add(mesh);
 
-    return { hinge, pageFrame, material };
+    return { anchor, mesh, material };
   });
 
   // -----------------------------------------------------------------------
-  // ESTADO DEL PASE DE PÁGINA (ver "REGLAS DE ANIMACIÓN" del encargo:
-  // "no debe poder iniciarse otra transición incompatible
-  // simultáneamente" + "el sistema debe saber cuál es la página
-  // actual"). `currentPageIndex` es la única fuente de verdad de qué
-  // hoja se está leyendo; `turnState`/`turnElapsed`/`turningIndex`
-  // describen la transición en curso (si la hay).
+  // `order`: única fuente de verdad de qué hoja física ocupa cada
+  // ranura de la pila. order[0] = la hoja que se está leyendo ahora
+  // mismo (arriba del todo); order[pageCount-1] = la más al fondo. Los
+  // índices de `pageContents`/`pages` NUNCA cambian (cada hoja conserva
+  // siempre su propio texto/textura); lo que cambia es su posición
+  // dentro de `order` al pasar de hoja.
   // -----------------------------------------------------------------------
-  let currentPageIndex = 0;
+  const order = pages.map((_, index) => index);
+
+  // Coloca cada hoja en la posición de reposo de su ranura actual
+  // (según `order`), sin animación — usado al inicializar y al cerrar
+  // cada transición (el resto de hojas, que no han volado, solo
+  // necesitan una reasignación de profundidad imperceptible).
+  function applyRestLayout() {
+    order.forEach((pageIndex, slot) => {
+      const page = pages[pageIndex];
+      page.anchor.position.set(0, 0, slotDepth(slot));
+      page.anchor.rotation.set(0, 0, 0);
+      page.mesh.renderOrder = 0;
+    });
+  }
+
+  // -----------------------------------------------------------------------
+  // ESTADO DEL PASE DE HOJA (ver "REGLAS DE ANIMACIÓN" del encargo:
+  // "no debe poder iniciarse otra transición mientras la actual está en
+  // curso" + "el sistema debe saber cuál es la hoja actual").
+  // `turnState`/`turnElapsed`/`turningPageIndex` describen la
+  // transición en curso (si la hay); `turningPageIndex` es el índice
+  // (en `pages`) de la hoja que está volando, no una ranura.
+  // -----------------------------------------------------------------------
   let turnState = "idle"; // "idle" | "forward" | "backward"
   let turnElapsed = 0;
-  let turningIndex = -1;
+  let turningPageIndex = -1;
 
   // -----------------------------------------------------------------------
   // APARIENCIA (fade in, controlado desde fuera durante LETTER_RISE).
-  // Actúa sobre la página actual: opacidad de su única malla (que ya
-  // contiene el texto desde su construcción — nunca una animación de
-  // revelado aparte) y una ligerísima subida decorativa sincronizada
-  // con la misma opacidad.
+  // Actúa sobre la hoja que está arriba del todo (order[0]): opacidad
+  // de su única malla (que ya contiene el texto desde su construcción
+  // — nunca una animación de revelado aparte) y una ligerísima subida
+  // decorativa sincronizada con la misma opacidad.
   // -----------------------------------------------------------------------
   function setAppearance(t) {
     const a = clamp01(t);
-    const page = pages[currentPageIndex];
+    const page = pages[order[0]];
     if (page) {
       page.material.opacity = a;
-      page.pageFrame.position.y = -(1 - a) * cfg.text.riseDistance;
+      page.anchor.position.y = -(1 - a) * cfg.text.riseDistance;
     }
     group.visible = a > 0.001;
   }
 
   // -----------------------------------------------------------------------
-  // PASAR PÁGINA (ver "ANIMACIÓN HACIA DELANTE"/"HACIA ATRÁS" y "API /
+  // PASAR HOJA (ver "FLECHA DERECHA"/"FLECHA IZQUIERDA" y "API /
   // CONTROL" del encargo). API mínima y reutilizable: nextPage() /
   // previousPage() / getCurrentPage() — funciona igual con 1, 2, 5 o 10
-  // hojas, sin ningún caso especial por cantidad (ver
-  // "NÚMERO DE HOJAS" del encargo). Sin cambios en esta iteración.
+  // hojas, sin ningún caso especial por cantidad.
+  //
+  // NAVEGACIÓN LINEAL (ver cabecera y NAVEGACIÓN en este módulo): al
+  // ser una pila física, nextPage() saca la hoja de arriba (order[0]) y
+  // la reinserta al fondo, revelando la siguiente; previousPage() saca
+  // la hoja del fondo (order[pageCount-1]) y la reinserta arriba,
+  // revelando la anterior. A diferencia de la versión circular de
+  // Claude, aquí hay LÍMITES reales: no se pasa de la última a la
+  // primera (ni viceversa) — en la hoja 5 `nextPage()` no hace nada y
+  // en la hoja 1 `previousPage()` no hace nada.
   //
   // Ambas funciones devuelven `true` si han iniciado una transición y
-  // `false` si no han hecho nada (ya en el límite, o ya hay una
-  // transición en curso) — así quien llama (candelaFinale.js) puede
-  // saberlo sin necesitar consultar isTurning() aparte.
+  // `false` si no han hecho nada (ya hay una transición en curso, solo
+  // hay una hoja, o se está en un límite) — así quien llama
+  // (candelaFinale.js) puede saberlo sin necesitar consultar
+  // isTurning() aparte.
   // -----------------------------------------------------------------------
   function nextPage() {
     if (turnState !== "idle") return false;
-    if (currentPageIndex >= pages.length - 1) return false;
+    if (pages.length <= 1) return false;
+    if (order[0] >= pages.length - 1) return false; // límite: última hoja
     turnState = "forward";
     turnElapsed = 0;
-    turningIndex = currentPageIndex;
+    turningPageIndex = order[0];
     return true;
   }
 
   function previousPage() {
     if (turnState !== "idle") return false;
-    if (currentPageIndex <= 0) return false;
+    if (pages.length <= 1) return false;
+    if (order[0] <= 0) return false; // límite: primera hoja
     turnState = "backward";
     turnElapsed = 0;
-    turningIndex = currentPageIndex - 1;
+    turningPageIndex = order[order.length - 1];
     return true;
   }
 
   function getCurrentPage() {
-    return currentPageIndex;
+    return order[0];
   }
 
   function getPageCount() {
@@ -206,24 +264,26 @@ export function createLetterMesh(cfg, onUpdate) {
 
   // -----------------------------------------------------------------------
   // reset(): re-arma la carta entera para un nuevo pase de la secuencia
-  // (llamado desde candelaFinale.js → start()). Vuelve siempre a la
-  // PRIMERA hoja. Las hojas 2..N ya están "físicamente ahí" desde el
-  // principio, completamente opacas — igual que en un cuaderno real,
-  // donde las páginas por leer ya existen debajo de la que se está
-  // leyendo — así que solo la primera necesita el fundido de aparición.
+  // (llamado desde candelaFinale.js → start()). Vuelve siempre al orden
+  // original (hoja 0 arriba). Las hojas 2..N ya están "físicamente ahí"
+  // desde el principio, completamente opacas — igual que en un
+  // cuaderno real, donde las páginas por leer ya existen debajo de la
+  // que se está leyendo — así que solo la primera necesita el fundido
+  // de aparición.
   // -----------------------------------------------------------------------
   function reset() {
     group.scale.setScalar(1);
 
-    currentPageIndex = 0;
     turnState = "idle";
     turnElapsed = 0;
-    turningIndex = -1;
+    turningPageIndex = -1;
+    order.length = 0;
+    pages.forEach((_, index) => order.push(index));
+
     pages.forEach((page, index) => {
-      page.hinge.rotation.y = 0;
-      page.pageFrame.position.y = 0;
       page.material.opacity = index === 0 ? 0 : 1;
     });
+    applyRestLayout();
 
     setAppearance(0);
     group.visible = false;
@@ -231,44 +291,94 @@ export function createLetterMesh(cfg, onUpdate) {
   reset();
 
   // -----------------------------------------------------------------------
-  // updatePageTurn(delta): avanza la transición de pasar página en
-  // curso, si la hay (ver "ANIMACIÓN HACIA DELANTE"/"HACIA ATRÁS" del
-  // encargo). Sin cambios en esta iteración — completamente
-  // independiente del (ya eliminado) doblado: candelaFinale.js solo
-  // permite llamar a nextPage()/previousPage() una vez la carta ya está
-  // visible en su posición final, pero esta función en sí no necesita
-  // saberlo: si no hay ninguna transición en curso
-  // (`turnState === "idle"`), no hace nada.
+  // updatePageTurn(delta): avanza la transición de pasar hoja en curso,
+  // si la hay (ver "FLECHA DERECHA"/"FLECHA IZQUIERDA" del encargo).
+  // candelaFinale.js solo permite llamar a nextPage()/previousPage()
+  // una vez la carta ya está visible en su posición final, pero esta
+  // función en sí no necesita saberlo: si no hay ninguna transición en
+  // curso (`turnState === "idle"`), no hace nada.
+  //
+  // TRAYECTORIA (ver "MUY IMPORTANTE: NO QUIERO UNA PÁGINA DE LIBRO" del
+  // encargo): la hoja que vuela sigue una curva de Bézier cúbica en el
+  // espacio — nunca una rotación sobre un eje fijo — con 4 puntos:
+  //   P0: ranura de origen (en reposo).
+  //   P1: justo tras "coger" la hoja — separada hacia la cámara y
+  //       empezando a elevarse.
+  //   P2: justo antes de "soltarla" — todavía elevada, pero ya por
+  //       detrás de la ranura de destino.
+  //   P3: ranura de destino (en reposo).
+  // Como P1/P2 están muy por encima del borde superior de la carta
+  // (`liftHeightFraction`), la hoja pasa siempre POR ENCIMA de las
+  // demás — nunca las atraviesa, sea cual sea su posición Z intermedia.
+  // Una inclinación (rotation.x) y un balanceo sutil (rotation.z),
+  // ambos en forma de campana (cero en los dos extremos), refuerzan la
+  // sensación de papel físico en el aire.
   // -----------------------------------------------------------------------
   function updatePageTurn(delta) {
     if (turnState === "idle") return;
     turnElapsed += delta;
     const t = Math.min(1, turnElapsed / pageCfg.turnDuration);
     // easeInOutCubic: arranca y termina suave en ambos extremos — un
-    // giro físico de página, no un fundido ni un rebote (ver "Quiero
-    // que el movimiento sea coherente en ambas direcciones").
+    // movimiento físico de recoger/posar una hoja, no un fundido ni un
+    // rebote (ver "Quiero que el movimiento sea coherente en ambas
+    // direcciones").
     const eased = easeInOutCubic(t);
-    const page = pages[turningIndex];
+    const page = pages[turningPageIndex];
+    const flight = pageCfg.flight;
 
-    if (turnState === "forward") {
-      // La hoja actual gira hacia el final del conjunto (0° → -180°).
-      page.hinge.rotation.y = -Math.PI * eased;
-      if (t >= 1) {
-        page.hinge.rotation.y = -Math.PI;
-        currentPageIndex = turningIndex + 1;
-        turnState = "idle";
-        turningIndex = -1;
+    const originSlot = turnState === "forward" ? 0 : pages.length - 1;
+    const targetSlot = turnState === "forward" ? pages.length - 1 : 0;
+    const startZ = slotDepth(originSlot);
+    const endZ = slotDepth(targetSlot);
+
+    const liftHeight = cfg.height * flight.liftHeightFraction;
+    const popZ = cfg.width * flight.popFraction;
+    const behindZ = cfg.width * flight.behindFraction;
+    const driftX = cfg.width * flight.driftFraction * (turnState === "forward" ? 1 : -1);
+
+    // Puntos de control de la curva (ver cabecera de la función). Con
+    // P0.y = P3.y = 0 y P1.y = P2.y simétricos, el punto más alto real
+    // de una cúbica de Bézier en t=0.5 es 0.75·controlY (coeficientes
+    // De Casteljau b=c=0.375 en el punto medio) — no `liftHeight`
+    // directamente. Se despeja `controlY` para que el pico de la curva
+    // sea exactamente `liftHeight` por encima de la hoja, así
+    // `liftHeightFraction` en finale.config.js sigue significando "lo
+    // que se eleva por encima del borde superior de la carta" tal cual.
+    const controlLift = liftHeight / 0.75;
+    const p0 = { x: 0, y: 0, z: startZ };
+    const p1 = { x: driftX * 0.5, y: controlLift, z: startZ + popZ };
+    const p2 = { x: -driftX * 0.5, y: controlLift, z: endZ - behindZ };
+    const p3 = { x: 0, y: 0, z: endZ };
+
+    const pos = cubicBezier3(p0, p1, p2, p3, eased);
+    page.anchor.position.set(pos.x, pos.y, pos.z);
+
+    // Campana (0 en los extremos, máxima a mitad de vuelo) para la
+    // inclinación y el balanceo — nunca queda torcida en reposo.
+    const bell = Math.sin(Math.PI * eased);
+    page.anchor.rotation.x = flight.tiltMax * bell * (turnState === "forward" ? 1 : -1);
+    page.anchor.rotation.z = Math.sin(eased * Math.PI * 2) * flight.wobbleMax * bell;
+
+    // Mientras vuela, siempre encima del resto en el z-buffer (ver
+    // "renderOrder" sugerido en el encargo) — insurance visual, ya que
+    // la elevación en Y evita el solape en la mayoría de los casos.
+    page.mesh.renderOrder = 10;
+
+    if (t >= 1) {
+      // Transición completa: la hoja pasa a ocupar la ranura de
+      // destino en `order`; el resto de hojas se reasignan a su nueva
+      // ranura (desplazamiento de profundidad imperceptible, sin
+      // animación — ver applyRestLayout()).
+      if (turnState === "forward") {
+        order.shift();
+        order.push(turningPageIndex);
+      } else {
+        order.pop();
+        order.unshift(turningPageIndex);
       }
-    } else {
-      // La hoja anterior (que estaba al final) vuelve hacia delante
-      // (-180° → 0°).
-      page.hinge.rotation.y = -Math.PI * (1 - eased);
-      if (t >= 1) {
-        page.hinge.rotation.y = 0;
-        currentPageIndex = turningIndex;
-        turnState = "idle";
-        turningIndex = -1;
-      }
+      applyRestLayout();
+      turnState = "idle";
+      turningPageIndex = -1;
     }
   }
 
@@ -287,6 +397,26 @@ export function createLetterMesh(cfg, onUpdate) {
     getCurrentPage,
     getPageCount,
     isTurning,
+  };
+}
+
+// -----------------------------------------------------------------------
+// cubicBezier3: evalúa una curva de Bézier cúbica en 3D en t ∈ [0,1] a
+// partir de 4 puntos de control {x,y,z} — usada por updatePageTurn()
+// para la trayectoria de la hoja que vuela (ver cabecera de esa
+// función). Fórmula estándar de De Casteljau expandida, sin
+// dependencias externas.
+// -----------------------------------------------------------------------
+function cubicBezier3(p0, p1, p2, p3, t) {
+  const u = 1 - t;
+  const a = u * u * u;
+  const b = 3 * u * u * t;
+  const c = 3 * u * t * t;
+  const d = t * t * t;
+  return {
+    x: a * p0.x + b * p1.x + c * p2.x + d * p3.x,
+    y: a * p0.y + b * p1.y + c * p2.y + d * p3.y,
+    z: a * p0.z + b * p1.z + c * p2.z + d * p3.z,
   };
 }
 

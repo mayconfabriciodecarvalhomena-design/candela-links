@@ -26,5 +26,8 @@ export const MUSIC_CONFIG = {
     "assets/audio/cancion5.mp4",
     "assets/audio/cancion7.mp4",
     "assets/audio/cancion6.mp4",
+    "assets/audio/cancion8.mp4",
+    "assets/audio/cancion9.mp4",
+    "assets/audio/cancion10.mp4",
   ],
 };

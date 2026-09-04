@@ -531,24 +531,31 @@ export const FINALE_CONFIG = {
     // no cambiar el comportamiento visible si nadie añade más hojas.
     // -----------------------------------------------------------------------
     pages: [
-      {
-        title: undefined,
-        text: "Te quiero",
-      },
+      { title: "Hoja 1", text: "Texto de la hoja 1" },
+      { title: "Hoja 2", text: "Texto de la hoja 2" },
+      { title: "Hoja 3", text: "Texto de la hoja 3" },
+      { title: "Hoja 4", text: "Texto de la hoja 4" },
+      { title: "Hoja 5", text: "Texto de la hoja 5" },
     ],
 
     // -----------------------------------------------------------------------
-    // PASE DE PÁGINA (ver "ANIMACIÓN HACIA DELANTE"/"HACIA ATRÁS" del
-    // encargo): cada hoja es un plano independiente con su propio
-    // pivote vertical en el borde IZQUIERDO de la carta (mismo
-    // lenguaje que `flapPivot`/`hingePivot` ya usado en este proyecto:
-    // se rota el PIVOTE, nunca la geometría). `nextPage()` gira la
-    // hoja actual de 0 a -180° (pasa hacia el final del conjunto);
-    // `previousPage()` gira la hoja anterior de -180° a 0° (vuelve
-    // hacia delante) — ver letterMesh.js.
+    // PASE DE HOJA (ITERACIÓN — PILA DE HOJAS SUELTAS, se abandona el
+    // pivote de libro. Ver letterMesh.js, cabecera de la sección
+    // "SISTEMA DE HOJAS", para la explicación completa). Las hojas son
+    // una PILA física: cada hoja tiene una ranura (slot) de profundidad
+    // fija en la pila (0 = arriba/delante, N-1 = abajo/detrás) y
+    // `nextPage()`/`previousPage()` reordenan qué hoja ocupa qué
+    // ranura, animando SOLO la hoja que se mueve con una trayectoria
+    // en arco (levantar → recorrer por encima de la pila → posar) —
+    // nunca girando sobre un pivote de lomo. `flight` controla la
+    // forma de ese arco.
+    //
+    // La navegación es LINEAL (no circular): 1 → 2 → 3 → 4 → 5 y su
+    // inverso, con límites reales (en la hoja 5 no se avanza, en la 1
+    // no se retrocede) — ver la cabecera de letterMesh.js.
     // -----------------------------------------------------------------------
     page: {
-      // Duración de la animación de pasar página (segundos), igual en
+      // Duración de la animación de pasar hoja (segundos), igual en
       // ambos sentidos (ver "Quiero que el movimiento sea coherente en
       // ambas direcciones" del encargo).
       turnDuration: 0.9,
@@ -557,6 +564,39 @@ export const FINALE_CONFIG = {
       // cambiar el tamaño/posición general de la carta (ver
       // letterMesh.js: es un desplazamiento imperceptible por hoja).
       stackSpacing: 0.00006,
+
+      // ARCO DE VUELO de la hoja que se está pasando (ver "FLECHA
+      // DERECHA"/"FLECHA IZQUIERDA" del encargo: separación → recorrido
+      // por encima de la pila, sin atravesarla → posado final). Todas
+      // las fracciones son relativas a `width`/`height` de la carta
+      // (cfg.letter.width/height), así el arco se mantiene proporcional
+      // sea cual sea el tamaño real configurado de la hoja.
+      flight: {
+        // Altura del arco por encima de la hoja, fracción de
+        // `height` — debe superar el borde superior de la carta para
+        // que se lea como "por encima de la pila", nunca atravesándola.
+        liftHeightFraction: 0.62,
+        // Separación inicial hacia la cámara al "coger" la hoja de la
+        // pila (fracción de `width`) — la sensación de agarrar el
+        // borde de una hoja suelta, no un giro que arranca ya en marcha.
+        popFraction: 0.85,
+        // Cuánto se adentra la hoja detrás de la posición final de su
+        // ranura durante el recorrido (fracción de `width`) — evita que
+        // parezca que se posa "desde dentro" de la pila.
+        behindFraction: 0.9,
+        // Desplazamiento lateral sutil durante el recorrido (fracción
+        // de `width`) — rompe la simetría perfecta para que el
+        // movimiento no se lea como una rotación mecánica sobre un eje.
+        driftFraction: 0.22,
+        // Inclinación máxima (radianes) mientras la hoja está en el
+        // aire — se anula por completo al posarse, la hoja nunca queda
+        // torcida en reposo.
+        tiltMax: 0.32,
+        // Ligero balanceo lateral (radianes) durante el recorrido, para
+        // reforzar la sensación de papel físico en el aire (no un
+        // sólido rígido perfectamente estable).
+        wobbleMax: 0.05,
+      },
 
       // TÍTULO (ver "TEXTO DE CADA HOJA" del encargo: centrado, arriba,
       // con margen, nunca pegado al borde). Comparte canvas con el
