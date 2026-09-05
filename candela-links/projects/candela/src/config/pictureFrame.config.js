@@ -35,9 +35,9 @@
 export const PICTURE_FRAME_CONFIG = {
   // x: a la derecha de la vela. Desplazado +0.15 esta iteración
   // (1.30 → 1.45) para mover el cuadro un poco más a la derecha,
-  // manteniendo el resto igual. Con el ancho exterior (0.85 + margin*2
-  // = 0.94) el marco ahora ocupa aprox. x=[0.98, 1.92] — comprobado que
-  // sigue dentro del encuadre de la cámara
+  // manteniendo el resto igual. Con el ancho exterior actual
+  // (0.952 + margin*2 = 1.0528) el marco ocupa aprox. x=[0.92, 1.98] —
+  // comprobado que sigue dentro del encuadre de la cámara
   // (camera.position=[-0.05,1.55,1.3], camera.lookAt=[0.7,1.3,-1.25])
   // y con margen de sobra antes de la esquina de la habitación (x=3.0).
   // z: cara frontal de wall.back (back.position[1] + thickness/2 =
@@ -69,17 +69,33 @@ export const PICTURE_FRAME_CONFIG = {
   // 0.94x0.64, dejando de sobra los márgenes ya comprobados en
   // `position`/`centerY` (respecto a la vela, la esquina de la
   // habitación y el techo).
-  width: 0.85,
-  height: 0.55,
+  //
+  // ITERACIÓN — CUADRO 12% MÁS GRANDE (ver encargo: agrandar el cuadro
+  // entre 10-15%, perceptible pero sutil, manteniendo proporciones y
+  // posición). `width`, `height`, `frame.margin`, `frame.depth` e
+  // `imageInset` se multiplican todos por el MISMO factor ×1.12
+  // (imagen + marco + grosor crecen juntos: homotecia pura). La zona
+  // de imagen pasa a 0.952x0.616, misma proporción que antes
+  // (0.952/0.616 = 1.545) y el marco exterior a ≈1.053x0.717. La
+  // posición no cambia — el cuadro crece desde su mismo centro
+  // (`position`/`centerY` intactos) — y los márgenes de escena siguen
+  // de sobra: borde inferior ≈1.79 frente a la mecha ≈1.62, superior
+  // ≈2.51 frente al techo (4.2), lateral ≈[0.92, 1.98] frente a la
+  // esquina de la habitación (x=3.0).
+  width: 0.952,
+  height: 0.616,
 
   frame: {
     // Grosor del borde de madera visible alrededor de la imagen
-    // (mismo campo que ROOM_CONFIG.mirror.frame.margin).
-    margin: 0.045,
+    // (mismo campo que ROOM_CONFIG.mirror.frame.margin). Escalado
+    // ×1.12 junto con width/height (ver ITERACIÓN de arriba) para
+    // que el marco conserve su grosor proporcional.
+    margin: 0.0504,
     // Profundidad del marco (cuánto sobresale de la pared). Pequeña
     // pero perceptible — para que se note como objeto con volumen
-    // real, no como una foto pegada a la pared.
-    depth: 0.035,
+    // real, no como una foto pegada a la pared. Escalada ×1.12 con
+    // el resto del cuadro.
+    depth: 0.0392,
     color: 0x4a3323, // madera oscura cálida, tono similar al marco del espejo
     roughness: 0.65,
   },
@@ -89,8 +105,8 @@ export const PICTURE_FRAME_CONFIG = {
   // recedido dentro del borde. Ese pequeño hueco es lo que permite que
   // la luz de la escena (la llama, la ambiental) dibuje una sombra
   // sutil del marco sobre la imagen, en vez de quedar todo en el mismo
-  // plano.
-  imageInset: 0.012,
+  // plano. Escalado ×1.12 con el resto del cuadro (homotecia pura).
+  imageInset: 0.01344,
 
   // Refuerza el "colgado en la pared, no flotando": separación mínima
   // entre la cara trasera del marco y la pared, solo para evitar
@@ -116,7 +132,7 @@ export const PICTURE_FRAME_CONFIG = {
   // en los mismos tonos cálidos de Candela, para que sea evidente que
   // ahí falta poner una foto sin desentonar visualmente mientras tanto.
   // -----------------------------------------------------------------------
-  imagePath: "assets/images/cuadro.jpeg",
+  imagePath: "assets/images/cuadro.png",
 
   // La imagen puede no tener exactamente la proporción width/height de
   // aquí arriba. En vez de estirarla (deformando la foto),

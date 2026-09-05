@@ -519,7 +519,23 @@ export const FINALE_CONFIG = {
       // tamaño base (0.205×0.29 → 0.267×0.377). Sigue del mismo orden
       // de magnitud que el sobre (cuerpo 0.27×0.18 + solapa 0.095 de
       // alto ≈ 0.27×0.275 de silueta total).
-      finalScale: 1.3,
+      //
+      // ITERACIÓN — CUADRO LIGERAMENTE MÁS GRANDE (ver encargo: "algo
+      // más grande en sus proporciones generales, 10-15%, sin resultar
+      // exagerado... el cuadro completo se perciba ligeramente más
+      // grande"). `finalScale` sube de 1.3 a 1.45 (×1.115 → +11.5%), el
+      // ÚNICO cambio. Es escala UNIFORME del `group` (setScalar, ver
+      // candelaFinale.js): ancho, alto y profundidad crecen con la MISMA
+      // proporción exacta, y con ellos el texto y los márgenes (todo se
+      // ve proporcionalmente idéntico — un "zoom" del cuadro completo,
+      // no una recolocación interna). La posición
+      // (finalDistanceFromCamera/finalVerticalOffset), la trayectoria y
+      // las animaciones NO se tocan. Flechas y área de escritura se
+      // anclan cada frame al bounding box real de la hoja
+      // (letterPageControls.js/letterWriteControls.js), así que siguen
+      // el nuevo tamaño automáticamente (fuera de la hoja el primero;
+      // la segunda como fracciones del rectángulo proyectado).
+      finalScale: 1.4,
     },
 
     // -----------------------------------------------------------------------
