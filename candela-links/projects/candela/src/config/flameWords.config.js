@@ -303,10 +303,10 @@ export const FLAME_WORDS_CONFIG = {
     // funciona sin tocar nada más.
     words: [
       "te quiero",
-      "aquí estoy",
-      "gracias por venir",
+      "siempre te querre",
+      "nunca estaras sola",
       "qué suerte tenerte",
-      "siempre contigo",
+      "eres lo mejor que tengo",
       "esto es para ti",
     ],
 

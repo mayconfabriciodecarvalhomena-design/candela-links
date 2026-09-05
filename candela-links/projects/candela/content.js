@@ -18,7 +18,12 @@ export const CONTENT = {
     // Aparece justo debajo del título + subrayado, con menos presencia
     // que ambos. Reutiliza el mismo elemento/estilo que ya existía
     // (.intro-meaning); solo ha cambiado el texto.
-    meaning: "Del latín candēla: vela, luz.",
+
+
+    meaning: "El nombre Candela simboliza luz, claridad, guía y esperanza; una luz capaz de iluminar incluso en los momentos más oscuros. Y para mí, tú has sido justamente eso. Has sido esa luz en momentos en los que todo parecía un poco más oscuro, esa persona capaz de hacer que todo se sintiera mejor simplemente estando ahí. Eres de esas personas que hacen que la vida se sienta más bonita, y no creo que pueda explicar con palabras lo mucho que significas para mí. Solo sé que, entre tantas personas, tuve la suerte de encontrarte a ti. Y si Candela significa luz, para mí tú siempre vas a ser la más bonita de todas.",
+
+
+
     buttonLabel: "CARGAR ESCENA",
     // Mientras la escena todavía se está preparando, el botón muestra
     // este texto seguido del porcentaje real de carga (p. ej.
@@ -37,13 +42,13 @@ export const CONTENT = {
   // ---------------------------------------------------------------------
   candleSequence: {
     // Aparece justo después de que la llama se apague por primera vez.
-    firstExtinguish: "La llama tiembla y se rinde, como si aún no fuera el momento.",
+    firstExtinguish: "La primera vez fue un destello de amor fuerte pero no fue lo suficiente para que la llama siguiera.",
 
     // Aparece justo después de que la llama se apague por segunda vez.
-    secondExtinguish: "Otra vez la oscuridad. Pero algo, esta vez, se ha quedado despierto.",
+    secondExtinguish: "La segunda vez con un poco de inteligencia se intenta reavivar, aunque por otros motivos no sigue adelante algo a cambiado.",
 
     // Aparece cuando la llama se enciende por tercera vez y ya no se
     // apaga: el momento en el que la vela se queda encendida de verdad.
-    finalLight: "Ahora sí. La luz se queda, y contigo también.",
+    finalLight: "La terceraa vez se queda con nosotros, quien sabe si se apagara pero lo unico que podemos estar seguros es que ahi una llama entre nosotros.",
   },
 };

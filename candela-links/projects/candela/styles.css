@@ -64,6 +64,20 @@ body {
    cerilla — no se pisan entre sí porque son listeners diferentes sobre
    el mismo <canvas>.
    ----------------------------------------------------------------------- */
+/* ITERACIÓN — TEXTO MÁS GRANDE Y MEJOR ASOCIADO AL GATO (ver encargo:
+   "el texto está demasiado hacia la derecha y es demasiado pequeño...
+   quiero que se perciba claramente como un texto asociado al gato,
+   manteniendo el estilo visual/cinematográfico actual"). `font-size`
+   sube de 0.95rem a 1.4rem (~47% más grande, claramente legible sin
+   dejar de ser un detalle discreto) y `letter-spacing` sube ligeramente
+   en la misma proporción que el resto de la tipografía cinematográfica
+   del proyecto (mismo criterio que `.narrative-text`). El recentrado
+   horizontal respecto al gato (antes desplazado hacia la derecha) vive
+   en el punto de anclaje 3D, no aquí — ver CONFIG.cat.hoverLabel.
+   horizontalOffset en cat.config.js + catHover.js. El resto del estilo
+   (familia serif Georgia, cursiva, halo/text-shadow cálido, fundido de
+   opacidad) se mantiene exactamente igual: mismo lenguaje visual que ya
+   existía. */
 .cat-hover-label {
   position: fixed;
   top: 0;
@@ -76,11 +90,12 @@ body {
 
   color: #d4cdc4;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.95rem;
+  font-size: 1.4rem;
   font-style: italic;
-  letter-spacing: 0.015em;
+  letter-spacing: 0.02em;
   white-space: nowrap;
   user-select: none;
+  text-align: center;
 
   text-shadow: 0 0 4px rgba(235, 229, 218, 0.45), 0 1px 2px rgba(0, 0, 0, 0.18);
 }

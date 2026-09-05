@@ -19,5 +19,5 @@ export const CANDLE_SEQUENCE_CONFIG = {
 
   // Segundos que cada frase narrativa permanece visible en pantalla
   // antes de desvanecerse (ver src/narrative.js).
-  narrativeLineDuration: 4.5,
+  narrativeLineDuration: 7,
 };

@@ -839,10 +839,25 @@ function buildPageTexture(pageData, letterWidth, letterHeight, textFontCfg, titl
   // existía). ANCLADO ARRIBA (ver cabecera de la función): la primera
   // línea empieza justo en `bodyTop`, nunca centrado en el espacio
   // restante. ----
+  //
+  // ITERACIÓN — HOJAS 1-10 CON TEXTO REAL DE LONGITUD VARIABLE (ver
+  // `cfg.pages` en finale.config.js). A diferencia de la última hoja
+  // (editable, con su propio scroll — ver paintWritablePage()), estas
+  // hojas NO tienen scroll: todo su texto debe caber de una vez, o el
+  // canvas 2D lo recorta en silencio por abajo (invisible, sin ningún
+  // aviso). `fitBodyText()` (ver más abajo) prueba primero al tamaño
+  // configurado y solo reduce la fuente, quirúrgicamente y con un
+  // suelo, si la hoja concreta lo necesita — ver cabecera de esa
+  // función para el porqué.
   const maxWidth = width * textFontCfg.maxWidthFraction;
-  const font = `${textFontCfg.weight} ${textFontCfg.sizePx}px ${textFontCfg.family}`;
-  const lines = wrapLines(ctx, pageData.text, maxWidth, font);
-  paintBodyLines(ctx, lines, width, bodyTop, textFontCfg);
+  const fitted = fitBodyText(ctx, pageData.text, maxWidth, height, bodyTop, textFontCfg);
+  paintBodyLines(ctx, fitted.lines, width, bodyTop, {
+    weight: textFontCfg.weight,
+    family: textFontCfg.family,
+    color: textFontCfg.color,
+    sizePx: fitted.sizePx,
+    lineHeightPx: fitted.lineHeightPx,
+  });
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.needsUpdate = true;
@@ -993,6 +1008,78 @@ function wrapLinesWithOffsets(ctx, text, maxWidth, font) {
 
 function wrapLines(ctx, text, maxWidth, font) {
   return wrapLinesWithOffsets(ctx, text, maxWidth, font).map((line) => line.text);
+}
+
+// -----------------------------------------------------------------------
+// fitBodyText: ajuste de tamaño de fuente EXCLUSIVO de las hojas
+// ESTÁTICAS (buildPageTexture()) — nunca de la última hoja editable,
+// que sigue con su propio sistema de scroll y su propio tamaño fijo
+// (ver `write.bottomMarginFraction`/paintWritablePage(), sin tocar).
+//
+// Cada hoja estática tiene ahora un texto de longitud variable (ver
+// `cfg.pages` en finale.config.js: 10 hojas de carta con textos muy
+// distintos entre sí) y, a diferencia de la hoja editable, NO tiene
+// scroll: todo su texto debe caber de una vez en el hueco disponible
+// bajo el título. Con un único tamaño de letra fijo para todas las
+// hojas (`textFontCfg.sizePx`), la hoja más larga simplemente se
+// saldría del canvas por abajo — el canvas 2D recorta en silencio
+// cualquier cosa dibujada fuera de sus límites, así que el texto que
+// no cupiera desaparecería sin ningún aviso ni error visible.
+//
+// Solución quirúrgica y completamente LOCAL a esta función: nunca
+// modifica `textFontCfg`/`cfg.text.font` (que sigue siendo la ÚNICA
+// fuente de verdad compartida con la hoja editable, ver cabecera del
+// archivo) ni ningún otro valor de configuración — solo decide, hoja a
+// hoja, con qué tamaño PINTAR esa hoja concreta. Se prueba primero al
+// tamaño configurado; si el texto de esa hoja no cabe, se reduce en
+// pasos de 1px (manteniendo siempre la misma proporción
+// tamaño/interlineado que ya existía) hasta que quepa. Así, las hojas
+// que ya cabían al tamaño normal (la mayoría de las 10 hojas de la
+// carta) no cambian en absoluto.
+//
+// `MIN_BODY_SIZE_RATIO` es un suelo de seguridad, NUNCA el objetivo:
+// para los textos reales de este encargo, comprobado hoja por hoja, la
+// mayoría se queda en el tamaño configurado (22px) sin ningún cambio, y
+// solo las hojas más largas (7-10) bajan de forma moderada — la más
+// exigente (hoja 10) se queda varios px por ENCIMA de este suelo. Se
+// deja en 68% (≈15px), con margen de sobra por debajo de lo que
+// realmente necesita cualquiera de las 10 hojas, no como un tamaño al
+// que se espere llegar, sino como red de seguridad ante un texto futuro
+// excepcionalmente largo: por debajo de ese suelo el texto dejaría de
+// leerse con comodidad ("la carta debe seguir siendo cómoda de leer",
+// ver encargo), así que a partir de ahí se prefiere aceptar el
+// desbordamiento antes que encoger más la letra.
+// -----------------------------------------------------------------------
+const MIN_BODY_SIZE_RATIO = 0.68;
+const BODY_BOTTOM_MARGIN_FRACTION = 0.05;
+
+function fitBodyText(ctx, text, maxWidth, canvasHeight, bodyTop, textFontCfg) {
+  const ratio = textFontCfg.lineHeightPx / textFontCfg.sizePx;
+  const minSizePx = Math.max(1, Math.round(textFontCfg.sizePx * MIN_BODY_SIZE_RATIO));
+  const availableHeight = Math.max(
+    textFontCfg.lineHeightPx,
+    canvasHeight - bodyTop - canvasHeight * BODY_BOTTOM_MARGIN_FRACTION
+  );
+
+  let sizePx = textFontCfg.sizePx;
+  while (sizePx > minSizePx) {
+    const font = `${textFontCfg.weight} ${sizePx}px ${textFontCfg.family}`;
+    const lines = wrapLines(ctx, text, maxWidth, font);
+    const lineHeightPx = Math.round(sizePx * ratio);
+    if (lines.length * lineHeightPx <= availableHeight) {
+      return { lines, sizePx, lineHeightPx };
+    }
+    sizePx -= 1;
+  }
+
+  // Suelo alcanzado (`MIN_BODY_SIZE_RATIO`): se pinta a este tamaño
+  // pase lo que pase (nunca más pequeño) — con los textos reales del
+  // encargo esto no llega a ocurrir, pero deja el sistema a salvo de
+  // un texto futuro excepcionalmente largo sin encoger la letra más
+  // allá del suelo definido.
+  const font = `${textFontCfg.weight} ${minSizePx}px ${textFontCfg.family}`;
+  const lines = wrapLines(ctx, text, maxWidth, font);
+  return { lines, sizePx: minSizePx, lineHeightPx: Math.round(minSizePx * ratio) };
 }
 
 // Encuentra en qué línea envuelta (y en qué columna dentro de ella)

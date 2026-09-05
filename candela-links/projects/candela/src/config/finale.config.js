@@ -550,10 +550,46 @@ export const FINALE_CONFIG = {
     // letterMesh.js → setWritableDraft()/paintWritablePage()), nunca
     // un texto estático.
     pages: [
-      { title: "Hoja 1", text: "Texto de la hoja 1" },
-      { title: "Hoja 2", text: "Texto de la hoja 2" },
-      { title: "Hoja 3", text: "Texto de la hoja 3" },
-      { title: "Hoja 4", text: "Texto de la hoja 4" },
+      {
+        title: "Candela",
+        text: "Hola Candela.\n\nEste proyecto me ha costado bastante más que el anterior. Lo empecé cuando todavía no habíamos hablado, con la intención de enviártelo para que siguieras pensando en mí, aunque ahora tenga una razón diferente.\n\nTodo lo que hago por ti lo hago con cariño y amor. Por eso he tardado tanto: cuando algo es para ti, quiero que salga perfecto.",
+      },
+      {
+        title: "Lo que eres para mí",
+        text: "Ahora estamos en una situación complicada y diferente. Pero la conversación que tuvimos fue una de las mejores que he tenido en mi vida. Fue algo muy bonito, y creo que hablamos con madurez, siendo realistas y sin ninguna mentira.\n\nLo aprecio muchísimo, porque vengo de un ambiente en el que no siempre ha sido así. Contigo siento que he encontrado a una persona que me complementa perfectamente.\n\nSé que la perfección no existe, pero para mí estás muy cerca de ella.",
+      },
+      {
+        title: "Te extraño",
+        text: "Las primeras semanas te extrañaba, pero no me sentía mal por ello. Intentaba mantenerme ocupado y seguir con mi vida.\n\nPero esta última semana ha sido diferente. No paro de pensar en ti.\n\nMe da mucha pena no poder estar contigo porque siento que me complementas muchísimo. Cuando quiero a alguien, lo único que quiero es darle todo el cariño del mundo.\n\nCada día siento más que eres la persona que quiero en mi vida. No sabes las ganas que tengo de hablarte.\n\nY quizá lo más difícil es que acabamos bien. Sé que podría escribirte en cualquier momento, pero aun así tengo que aguantarme.",
+      },
+      {
+        title: "Si volvemos a coincidir",
+        text: "Falta poco para volver al instituto y para mí será una etapa diferente. Estaré en segundo de grado, tendré más dificultad, prácticas y probablemente estaré más ocupado. Tú irás por la mañana y yo por la tarde, así que quizá sea difícil que coincidamos.\n\nPero si algún día coincidimos, no sé cómo reaccionaría.\n\nEres una chica guapísima. Me encantan tus ojos, tus labios, tu manera de ser y lo mucho que me cuidabas. Verte en persona siempre despertaba en mí un sentimiento especial.\n\nEn teoría debería hacer mi vida y seguir adelante, pero cuesta superar a una persona que, en tan poco tiempo, ha sido tanto para mí.",
+      },
+      {
+        title: "Aquellos días",
+        text: "La experiencia que tuvimos en el Erasmus fue increíble. Siento que ha sido una de las mejores experiencias que he vivido, y en parte gracias a ti.\n\nContigo dormí con alguien por primera vez. Sentir tu respiración, verte dormida y abrazada a mí fueron algunas de las mejores cosas de todo el Erasmus.\n\nSon recuerdos que todavía tengo muy presentes, quizá porque fueron momentos muy simples, pero para mí significaron muchísimo.",
+      },
+      {
+        title: "La paz que me das",
+        text: "Hay algo de ti que nunca he sabido explicar del todo: la seguridad que me das.\n\nMuchas veces siento que puedo confiar ciegamente en ti. Contigo he sentido una seguridad y una paz que nunca imaginé que pudiera sentir con alguien.\n\nCreo que esa es una de las razones por las que te quiero tanto. No eres solamente alguien a quien quiero; eres alguien con quien puedo sentirme tranquilo, alguien que me hace sentir que estoy donde quiero estar.\n\nY por eso siento que eres una de las mejores cosas que me han pasado en la vida.",
+      },
+      {
+        title: "Las pequeñas señales",
+        text: "Te extraño cada día más.\n\nHace poco me solicitaste en Instagram y la verdad es que no me lo esperaba. Me alegró verte avanzar, incluso ver que habías dejado de seguir a tu ex.\n\nTambién vi que tenías la misma canción que yo en tu última historia. No sé si lo hiciste aposta, pero yo me di cuenta.\n\nY cuando hablamos después de la FM de Vilafranca me encantó verte feliz y disfrutando. Te extrañaba mucho y fue bonito poder hablar contigo.\n\nSon pequeñas cosas, quizá no significan nada, pero para mí sí. Me hacen pensar que quizá sigues pensando en mí, al menos un poco.\n\nY eso hace que me cueste todavía más pensar que lo nuestro pudo haber sido algo pasajero.",
+      },
+      {
+        title: "Quizá aún no sea el momento",
+        text: "A veces pienso en todo lo que ha pasado entre nosotros y en nuestra situación actual, y la verdad es que es difícil. Pero aun así estoy convencido de que te amo y de que eres lo que quiero en mi vida.\n\nAunque esté tan seguro de lo que siento, sé que estamos como estamos por una razón. Quizá todavía no sea el momento.\n\nNo sé si tú me extrañas, si piensas en mí o qué nos espera en el futuro. Y eso me da miedo, porque en el fondo de mi corazón no quiero perderte.\n\nVivimos creyendo que siempre habrá otra oportunidad, pero la vida no siempre funciona así. Por eso intento prepararme para cualquier situación.\n\nAunque te quiera muchísimo, también intento hacer mi vida, porque no tenemos nada asegurado.\n\nPero una cosa sí tengo clara: no quiero que pensar en el futuro haga que deje de valorar lo que siento por ti ahora.",
+      },
+      {
+        title: "Siempre estaré",
+        text: "Una vez más, quiero que sepas que te amo y que, pase lo que pase, siempre me acordaré de ti.\n\nEres una persona maravillosa. Has pasado por muchas complicaciones en tu vida y, aun así, has seguido adelante. Eres fuerte y sé que vas a conseguir todo lo que te propongas.\n\nSi alguna vez necesitas cariño, apoyo o simplemente a alguien que te escuche, yo estaré para ti.\n\nNo sé si sentirás lo mismo que yo, ni si esta situación para ti es más fácil o más difícil. Lo único que puedo hacer es transmitirte mis sentimientos.\n\nSolo quiero que mi niña esté bien. Y aunque ahora no estemos juntos, quiero que recuerdes que siempre voy a querer que te vaya bien.\n\nSiempre serás una persona muy especial para mí.",
+      },
+      {
+        title: "Para ti",
+        text: "Hice este proyecto especialmente para que puedas sentirte un poco más conectada conmigo.\n\nEste es un enlace único que puedo ir cambiando. Quizá la semana que viene encuentres otras palabras, una carta diferente, nuevos elementos o incluso una animación completamente distinta.\n\nLo hice así porque no sé cuánto va a durar este proceso ni cómo va a terminar, pero no quiero sentir que nos alejamos cada vez más. Quiero sentir lo contrario, incluso aunque no estemos hablando.\n\nY ahora quiero darte algo que quizá sea todavía más importante: un espacio para ti.\n\nEn la siguiente página podrás escribirme todo lo que quieras decirme. No te calles nada. Si quieres que te responda, te responderé.\n\nPuedes desahogarte conmigo, contarme lo que sea. Yo te leeré siempre.\n\nHe creado todo esto para que, aunque ahora estemos así, tengas un pequeño lugar donde sentirte cerca de mí y recordar que siempre estaré para ti.\n\nPorque te amo.",
+      },
       { title: "Ahora escribe tú...", text: "" },
     ],
 

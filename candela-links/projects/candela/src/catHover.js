@@ -100,8 +100,14 @@ export function createCatHoverLabel(camera, renderer, cat) {
     if (!cat.model) return;
 
     box.setFromObject(cat.model);
+    // ITERACIÓN — RECENTRADO HORIZONTAL (ver CONFIG.cat.hoverLabel.
+    // horizontalOffset en cat.config.js para la explicación completa
+    // del porqué): se suma este desplazamiento al centro X del bounding
+    // box real del gato, nunca se toca `cat.model`/`cat.group` — el
+    // gato en sí no se mueve, solo el punto sobre el que se ancla y
+    // sigue el texto flotante.
     worldTop.set(
-      (box.min.x + box.max.x) / 2,
+      (box.min.x + box.max.x) / 2 + (cfg.horizontalOffset || 0),
       box.max.y + cfg.verticalOffset,
       (box.min.z + box.max.z) / 2
     );

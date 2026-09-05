@@ -280,5 +280,21 @@ export const CAT_CONFIG = {
     // Altura (mismas unidades que el resto de la escena) por encima del
     // punto más alto del bounding box del gato a la que flota el texto.
     verticalOffset: 0.12,
+
+    // ITERACIÓN — RECENTRADO HORIZONTAL (ver encargo: "el texto está
+    // demasiado hacia la derecha... quiero que quede visualmente
+    // centrado respecto al gato"). El ancla horizontal por defecto
+    // (centro X del bounding box 3D real del gato, ver catHover.js)
+    // queda desplazada hacia la derecha del centro VISUAL del gato,
+    // porque el bounding box incluye geometría (cola, postura) que no
+    // es simétrica respecto al cuerpo — así que el centro geométrico no
+    // coincide con "donde se lee el gato". En vez de tocar la posición
+    // real del gato (CONFIG.cat.position/rotationY, prohibido por el
+    // encargo), se corrige aquí, en el propio punto de anclaje del
+    // texto: un desplazamiento en el eje X LOCAL de la escena (mismas
+    // unidades que `position`/`verticalOffset`), negativo = hacia la
+    // izquierda. Puramente del overlay del hover, no afecta a nada más
+    // del gato ni de la escena.
+    horizontalOffset: -0.16,
   },
 };
