@@ -495,7 +495,7 @@ export const FINALE_CONFIG = {
       // margen de sobra respecto al near plane de la cámara (0.1, ver
       // config.js) — sin riesgo de clipping.
       finalDistanceFromCamera: 0.54,
-      finalVerticalOffset: 0.02,
+      finalVerticalOffset: -0.01,
 
       // Curvatura sutil de la trayectoria (Bézier cuadrática, mismo
       // criterio que cfg.travel del sobre) — nunca una línea recta

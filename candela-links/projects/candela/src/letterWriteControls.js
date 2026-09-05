@@ -358,11 +358,11 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
   // bajo el borde. El borde derecho, en cambio, seguía fuera de
   // encuadre en esa altura (la hoja es más ancha que la ventana ahí),
   // así que no había overflow lateral real, solo margen estético.
-  // Antes: 0.09 / 0.066 (0.12×0.55). Ahora: 0.12 / 0.14 — el ajuste
+  // Antes: 0.09 / 0.066 (0.12×0.55). Ahora: 0.12 / 0.11 — el ajuste
   // vertical es el dominante (cubre la invasión medida más un margen
   // de seguridad), el lateral es un margen menor, tal como se pidió.
   const SEND_BTN_SIDE_INSET = 0.12;
-  const SEND_BTN_BOTTOM_INSET = 0.14;
+  const SEND_BTN_BOTTOM_INSET = 0.11;
   const SEND_BTN_FX = 1 - SEND_BTN_SIDE_INSET;
   const SEND_BTN_FY = SEND_BTN_BOTTOM_INSET;
   const sendBtnOriginWorld = new THREE.Vector3();
