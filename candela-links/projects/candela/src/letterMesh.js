@@ -356,6 +356,64 @@ export function createLetterMesh(cfg, onUpdate) {
   }
 
   // -----------------------------------------------------------------------
+  // ITERACIÓN — CORRECCIÓN "SIGUE APARECIENDO LA HOJA 5" (ver vídeo
+  // aportado: al pasar, por ejemplo, 3→4, se ve "Ahora escribe tú..."
+  // —hoja 5— un instante en mitad del vuelo, sin participar en esa
+  // transición).
+  //
+  // Causa real: hasta ahora, TODAS las hojas estaban permanentemente
+  // presentes/renderizadas (`lockOpaque()` las deja opacas y con
+  // profundidad real para siempre — ver arriba), y la separación entre
+  // "actual" y "el resto" se conseguía SOLO por posición (todas las que
+  // no son la actual, incluidas las totalmente ajenas a cualquier
+  // transición, comparten la misma profundidad trasera —ver
+  // `slotDepth()`). Cuando las dos hojas activas de una transición se
+  // separan de esa posición trasera compartida (al elevarse), ya no hay
+  // NADA cubriendo ese hueco salvo lo que sea que siga ahí sin moverse
+  // — el resto de la pila (hojas ajenas a la transición), que la GPU sí
+  // sigue pintando aunque no participen. El fix de fase de la iteración
+  // anterior (dos hojas activas con solape) resuelve CUÁNDO se cruzan
+  // esas dos hojas entre sí, pero no evita que una TERCERA hoja (ajena)
+  // sea justo lo que hay detrás cuando ambas activas se apartan.
+  //
+  // Solución — VISIBILIDAD EXPLÍCITA POR ESTADO (tal y como pide el
+  // encargo, "IDEA QUE QUIERO QUE INVESTIGUES"): en reposo, solo
+  // `order[0]` (la hoja actual) tiene `mesh.visible = true`; durante una
+  // transición, solo las DOS hojas participantes (outgoing/incoming, ver
+  // `updatePageTurn()`) lo tienen. El resto de hojas tiene
+  // `mesh.visible = false` — directamente EXCLUIDAS del renderizado por
+  // three.js, no ocultas por opacidad ni por posición. Con esto, no
+  // importa qué profundidad tenga una hoja ajena en ese instante: si no
+  // participa, ni siquiera se envía a la GPU, así que es estructuralmente
+  // imposible que "asome". No es una animación de opacidad progresiva
+  // (`setAppearance()` sigue intacta, gobierna el fundido inicial de la
+  // hoja 1 exactamente igual que antes) ni un truco de orden de pintado
+  // (`renderOrder` sigue sin usarse en ningún sitio): es simplemente qué
+  // objetos existen para la GPU en cada instante, calculado a partir del
+  // mismo estado (`order`, `turnState`, `turningPageIndex`,
+  // `secondPageIndex`) que ya gobierna la trayectoria — ninguna fuente
+  // de verdad nueva.
+  //
+  // Se llama una vez por frame desde `update()`, después de
+  // `updatePageTurn()` — así siempre refleja el estado ya actualizado de
+  // ese mismo frame (incluida la reasignación de `order[]` justo cuando
+  // una transición termina, sin ningún frame de desfase).
+  // -----------------------------------------------------------------------
+  function updateVisibility() {
+    let firstActiveIndex;
+    let secondActiveIndex = -1;
+    if (turnState === "idle") {
+      firstActiveIndex = order[0];
+    } else {
+      firstActiveIndex = turnState === "forward" ? turningPageIndex : secondPageIndex;
+      secondActiveIndex = turnState === "forward" ? secondPageIndex : turningPageIndex;
+    }
+    pages.forEach((page, index) => {
+      page.mesh.visible = index === firstActiveIndex || index === secondActiveIndex;
+    });
+  }
+
+  // -----------------------------------------------------------------------
   // PASAR HOJA (ver "FLECHA DERECHA"/"FLECHA IZQUIERDA" y "API /
   // CONTROL" del encargo). API mínima y reutilizable: nextPage() /
   // previousPage() / getCurrentPage() — funciona igual con 1, 2, 5 o 10
@@ -491,6 +549,7 @@ export function createLetterMesh(cfg, onUpdate) {
     }
 
     setAppearance(0);
+    updateVisibility();
   }
   reset();
 
@@ -653,6 +712,7 @@ export function createLetterMesh(cfg, onUpdate) {
 
   function update(delta) {
     updatePageTurn(delta);
+    updateVisibility();
   }
 
   onUpdate(update);

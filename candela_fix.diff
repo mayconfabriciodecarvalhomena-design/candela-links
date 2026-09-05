@@ -1,5 +1,5 @@
 diff --git a/candela-links/projects/candela/src/letterMesh.js b/candela-links/projects/candela/src/letterMesh.js
-index 5fec58a..eb0bb34 100644
+index 5fec58a..124108c 100644
 --- a/candela-links/projects/candela/src/letterMesh.js
 +++ b/candela-links/projects/candela/src/letterMesh.js
 @@ -35,10 +35,14 @@ import * as THREE from "three";
@@ -185,7 +185,7 @@ index 5fec58a..eb0bb34 100644
      });
    }
  
-@@ -184,29 +262,87 @@ export function createLetterMesh(cfg, onUpdate) {
+@@ -184,69 +262,196 @@ export function createLetterMesh(cfg, onUpdate) {
    // ESTADO DEL PASE DE HOJA (ver "REGLAS DE ANIMACIÓN" del encargo:
    // "no debe poder iniciarse otra transición mientras la actual está en
    // curso" + "el sistema debe saber cuál es la hoja actual").
@@ -285,8 +285,66 @@ index 5fec58a..eb0bb34 100644
 +    if (a >= 1) lockOpaque();
    }
  
++  // -----------------------------------------------------------------------
++  // ITERACIÓN — CORRECCIÓN "SIGUE APARECIENDO LA HOJA 5" (ver vídeo
++  // aportado: al pasar, por ejemplo, 3→4, se ve "Ahora escribe tú..."
++  // —hoja 5— un instante en mitad del vuelo, sin participar en esa
++  // transición).
++  //
++  // Causa real: hasta ahora, TODAS las hojas estaban permanentemente
++  // presentes/renderizadas (`lockOpaque()` las deja opacas y con
++  // profundidad real para siempre — ver arriba), y la separación entre
++  // "actual" y "el resto" se conseguía SOLO por posición (todas las que
++  // no son la actual, incluidas las totalmente ajenas a cualquier
++  // transición, comparten la misma profundidad trasera —ver
++  // `slotDepth()`). Cuando las dos hojas activas de una transición se
++  // separan de esa posición trasera compartida (al elevarse), ya no hay
++  // NADA cubriendo ese hueco salvo lo que sea que siga ahí sin moverse
++  // — el resto de la pila (hojas ajenas a la transición), que la GPU sí
++  // sigue pintando aunque no participen. El fix de fase de la iteración
++  // anterior (dos hojas activas con solape) resuelve CUÁNDO se cruzan
++  // esas dos hojas entre sí, pero no evita que una TERCERA hoja (ajena)
++  // sea justo lo que hay detrás cuando ambas activas se apartan.
++  //
++  // Solución — VISIBILIDAD EXPLÍCITA POR ESTADO (tal y como pide el
++  // encargo, "IDEA QUE QUIERO QUE INVESTIGUES"): en reposo, solo
++  // `order[0]` (la hoja actual) tiene `mesh.visible = true`; durante una
++  // transición, solo las DOS hojas participantes (outgoing/incoming, ver
++  // `updatePageTurn()`) lo tienen. El resto de hojas tiene
++  // `mesh.visible = false` — directamente EXCLUIDAS del renderizado por
++  // three.js, no ocultas por opacidad ni por posición. Con esto, no
++  // importa qué profundidad tenga una hoja ajena en ese instante: si no
++  // participa, ni siquiera se envía a la GPU, así que es estructuralmente
++  // imposible que "asome". No es una animación de opacidad progresiva
++  // (`setAppearance()` sigue intacta, gobierna el fundido inicial de la
++  // hoja 1 exactamente igual que antes) ni un truco de orden de pintado
++  // (`renderOrder` sigue sin usarse en ningún sitio): es simplemente qué
++  // objetos existen para la GPU en cada instante, calculado a partir del
++  // mismo estado (`order`, `turnState`, `turningPageIndex`,
++  // `secondPageIndex`) que ya gobierna la trayectoria — ninguna fuente
++  // de verdad nueva.
++  //
++  // Se llama una vez por frame desde `update()`, después de
++  // `updatePageTurn()` — así siempre refleja el estado ya actualizado de
++  // ese mismo frame (incluida la reasignación de `order[]` justo cuando
++  // una transición termina, sin ningún frame de desfase).
++  // -----------------------------------------------------------------------
++  function updateVisibility() {
++    let firstActiveIndex;
++    let secondActiveIndex = -1;
++    if (turnState === "idle") {
++      firstActiveIndex = order[0];
++    } else {
++      firstActiveIndex = turnState === "forward" ? turningPageIndex : secondPageIndex;
++      secondActiveIndex = turnState === "forward" ? secondPageIndex : turningPageIndex;
++    }
++    pages.forEach((page, index) => {
++      page.mesh.visible = index === firstActiveIndex || index === secondActiveIndex;
++    });
++  }
    // -----------------------------------------------------------------------
-@@ -215,38 +351,50 @@ export function createLetterMesh(cfg, onUpdate) {
+   // PASAR HOJA (ver "FLECHA DERECHA"/"FLECHA IZQUIERDA" y "API /
+   // CONTROL" del encargo). API mínima y reutilizable: nextPage() /
    // previousPage() / getCurrentPage() — funciona igual con 1, 2, 5 o 10
    // hojas, sin ningún caso especial por cantidad.
    //
@@ -354,7 +412,7 @@ index 5fec58a..eb0bb34 100644
      return true;
    }
  
-@@ -264,12 +412,12 @@ export function createLetterMesh(cfg, onUpdate) {
+@@ -264,12 +469,12 @@ export function createLetterMesh(cfg, onUpdate) {
  
    // -----------------------------------------------------------------------
    // reset(): re-arma la carta entera para un nuevo pase de la secuencia
@@ -373,7 +431,7 @@ index 5fec58a..eb0bb34 100644
    // -----------------------------------------------------------------------
    function reset() {
      group.scale.setScalar(1);
-@@ -277,98 +425,169 @@ export function createLetterMesh(cfg, onUpdate) {
+@@ -277,98 +482,170 @@ export function createLetterMesh(cfg, onUpdate) {
      turnState = "idle";
      turnElapsed = 0;
      turningPageIndex = -1;
@@ -397,6 +455,7 @@ index 5fec58a..eb0bb34 100644
  
      setAppearance(0);
 -    group.visible = false;
++    updateVisibility();
    }
    reset();
  
@@ -605,7 +664,7 @@ index 5fec58a..eb0bb34 100644
        if (turnState === "forward") {
          order.shift();
          order.push(turningPageIndex);
-@@ -379,6 +598,7 @@ export function createLetterMesh(cfg, onUpdate) {
+@@ -379,11 +656,13 @@ export function createLetterMesh(cfg, onUpdate) {
        applyRestLayout();
        turnState = "idle";
        turningPageIndex = -1;
@@ -613,7 +672,13 @@ index 5fec58a..eb0bb34 100644
      }
    }
  
-@@ -400,6 +620,33 @@ export function createLetterMesh(cfg, onUpdate) {
+   function update(delta) {
+     updatePageTurn(delta);
++    updateVisibility();
+   }
+ 
+   onUpdate(update);
+@@ -400,6 +679,33 @@ export function createLetterMesh(cfg, onUpdate) {
    };
  }
  
