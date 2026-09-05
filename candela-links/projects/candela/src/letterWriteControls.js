@@ -86,6 +86,7 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
   document.body.appendChild(statusEl);
 
   let draft = "";
+  let caretIndex = 0;
   let isFocused = false;
   let sending = false;
   let statusTimeout = null;
@@ -109,7 +110,7 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
   let cursorTimer = null;
 
   function redraw() {
-    candelaFinale.setPageDraft(draft, { showCursor: isFocused && cursorOn });
+    candelaFinale.setPageDraft(draft, { caretIndex, showCursor: isFocused && cursorOn });
   }
 
   function startCursorBlink() {
@@ -127,10 +128,28 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
     cursorTimer = null;
   }
 
+  // -----------------------------------------------------------------------
+  // SINCRONIZACIÓN CON EL TEXTAREA REAL (ver "TEXTO LARGO: SCROLL Y
+  // CURSOR REAL" del encargo). `caretIndex` se lee SIEMPRE de
+  // `input.selectionStart` — nunca se asume "el final del texto" salvo
+  // que el navegador diga eso de verdad. Se recalcula tras CUALQUIER
+  // evento que pueda mover el cursor sin cambiar el valor (flechas,
+  // Home/End, click, selección) además de tras cada pulsación que sí
+  // cambia el texto — así el cursor visual (ver letterMesh.js →
+  // paintWritablePage()/locateCaret()) y el scroll de la hoja
+  // (page.writeScrollTop, ver el mismo archivo) SIEMPRE seleccionan la
+  // posición real de edición, nunca una posición fija.
+  // -----------------------------------------------------------------------
+  function syncFromInput() {
+    draft = input.value;
+    caretIndex = input.selectionStart != null ? input.selectionStart : draft.length;
+    redraw();
+  }
+
   input.addEventListener("focus", () => {
     isFocused = true;
     startCursorBlink();
-    redraw();
+    syncFromInput();
   });
 
   input.addEventListener("blur", () => {
@@ -139,10 +158,14 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
     redraw();
   });
 
-  input.addEventListener("input", () => {
-    draft = input.value;
-    redraw();
-  });
+  input.addEventListener("input", syncFromInput);
+  // "keyup" cubre ↑/↓/←/→/Home/End/PageUp/PageDown: el propio
+  // <textarea> ya sabe moverse con esas teclas (nunca se reimplementa
+  // esa navegación aquí), esto solo relee dónde ha quedado el cursor
+  // DESPUÉS de que el navegador lo haya movido.
+  input.addEventListener("keyup", syncFromInput);
+  input.addEventListener("click", syncFromInput);
+  input.addEventListener("select", syncFromInput);
 
   // -----------------------------------------------------------------------
   // ENVÍO (ver "BOTÓN DE ENVIAR"/"UTILIZAR EL BACKEND EXISTENTE" del
@@ -175,6 +198,7 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
 
       if (res.ok) {
         draft = "";
+        caretIndex = 0;
         input.value = "";
         redraw();
         setStatus((cfg.status && cfg.status.sentLabel) || "Enviado ✓");
@@ -204,27 +228,101 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
   const box = new THREE.Box3();
   const corner = new THREE.Vector3();
 
-  function projectedRect(object3D) {
+  function projectToScreen(worldPoint, rect) {
+    corner.copy(worldPoint).project(camera);
+    return {
+      x: rect.left + (corner.x * 0.5 + 0.5) * rect.width,
+      y: rect.top + (-corner.y * 0.5 + 0.5) * rect.height,
+    };
+  }
+
+  function projectedRect(object3D, rect) {
     box.setFromObject(object3D);
     const { min, max } = box;
-    const rect = domElement.getBoundingClientRect();
     let left = Infinity;
     let top = Infinity;
     let right = -Infinity;
     let bottom = -Infinity;
 
     for (let i = 0; i < 8; i++) {
-      corner.set(i & 1 ? max.x : min.x, i & 2 ? max.y : min.y, i & 4 ? max.z : min.z).project(camera);
-      const sx = rect.left + (corner.x * 0.5 + 0.5) * rect.width;
-      const sy = rect.top + (-corner.y * 0.5 + 0.5) * rect.height;
-      left = Math.min(left, sx);
-      top = Math.min(top, sy);
-      right = Math.max(right, sx);
-      bottom = Math.max(bottom, sy);
+      const p = projectToScreen(
+        { x: i & 1 ? max.x : min.x, y: i & 2 ? max.y : min.y, z: i & 4 ? max.z : min.z },
+        rect
+      );
+      left = Math.min(left, p.x);
+      top = Math.min(top, p.y);
+      right = Math.max(right, p.x);
+      bottom = Math.max(bottom, p.y);
     }
 
     return { left, top, width: right - left, height: bottom - top };
   }
+
+  // -----------------------------------------------------------------------
+  // ORIENTACIÓN DEL BOTÓN "ENVIAR" (ver "BOTÓN ENVIAR" del encargo de
+  // esta iteración): la carta se ve en perspectiva desde una cámara que
+  // NO mira de frente al plano de la hoja (ver config.js →
+  // CONFIG.camera.position/lookAt) — por eso, aunque `letterGroup`
+  // nunca tiene rotación propia en reposo (ver candelaFinale.js →
+  // applyRestLayout()/computeLetterEmergePath(), "la orientación se
+  // deja en su identidad por defecto"), la hoja SÍ se dibuja como un
+  // cuadrilátero ligeramente inclinado en pantalla — puro efecto de
+  // perspectiva. El botón, al ser un rectángulo HTML plano, se notaba
+  // "pegado a la cámara" por no seguir esa misma inclinación.
+  //
+  // Solución (sin tocar cámara ni la orientación de la carta, tal como
+  // pide el encargo): proyectar los ejes locales X/Y de `letterGroup`
+  // a espacio de pantalla (misma proyección cámara→pantalla que ya usa
+  // projectedRect() arriba) y usar esas dos direcciones como base de
+  // una matriz CSS 2D (`matrix(a,b,c,d,0,0)`) aplicada al botón — una
+  // rotación/cizalla que reproduce la misma inclinación que ve la
+  // cámara, SIN cambiar el tamaño del botón (los vectores se
+  // normalizan a longitud 1 antes de usarlos: solo aportan dirección,
+  // nunca escala) — nunca "un botón gigante ni llamativo".
+  // -----------------------------------------------------------------------
+  const worldQuaternion = new THREE.Quaternion();
+  const axisX = new THREE.Vector3();
+  const axisY = new THREE.Vector3();
+  const AXIS_PROBE = 0.01; // unidades de mundo — pequeño, solo para leer la dirección local
+
+  function computeSurfaceBasis2D(object3D, originWorld, rect) {
+    object3D.getWorldQuaternion(worldQuaternion);
+    axisX.set(1, 0, 0).applyQuaternion(worldQuaternion);
+    axisY.set(0, 1, 0).applyQuaternion(worldQuaternion);
+
+    const originScreen = projectToScreen(originWorld, rect);
+    const xScreen = projectToScreen(
+      { x: originWorld.x + axisX.x * AXIS_PROBE, y: originWorld.y + axisX.y * AXIS_PROBE, z: originWorld.z + axisX.z * AXIS_PROBE },
+      rect
+    );
+    const yScreen = projectToScreen(
+      { x: originWorld.x + axisY.x * AXIS_PROBE, y: originWorld.y + axisY.y * AXIS_PROBE, z: originWorld.z + axisY.z * AXIS_PROBE },
+      rect
+    );
+
+    let vx = { x: xScreen.x - originScreen.x, y: xScreen.y - originScreen.y };
+    let vy = { x: yScreen.x - originScreen.x, y: yScreen.y - originScreen.y };
+    const lenX = Math.hypot(vx.x, vx.y) || 1;
+    const lenY = Math.hypot(vy.x, vy.y) || 1;
+    return { vx: { x: vx.x / lenX, y: vx.y / lenX }, vy: { x: vy.x / lenY, y: vy.y / lenY } };
+  }
+
+  const letterCenterWorld = new THREE.Vector3();
+
+  // Métrica de fuente aproximada para el <textarea> invisible (ver
+  // "SINCRONIZACIÓN CON EL TEXTAREA REAL" más arriba): su propio
+  // ajuste de línea decide dónde caen ↑/↓/Home/End DENTRO del propio
+  // navegador, así que se aproxima al tamaño/interlineado real que ve
+  // la cámara (proporcional a `rect.height`, misma fracción que ocupa
+  // el cuerpo del texto en el canvas oculto — ver finale.config.js →
+  // letter.text.font) para que esa navegación nativa coincida, línea a
+  // línea, con lo que se ve horneado en la hoja. Nunca pretende ser
+  // pixel-perfect (dos motores de layout distintos), solo mantener
+  // ambos wrappings lo bastante cerca como para que ↑/↓ se sientan
+  // naturales.
+  const bodyFontCfg = CONFIG.finale.letter.text.font;
+  const fontSizeRatio = bodyFontCfg.sizePx / bodyFontCfg.canvasHeightPx;
+  const lineHeightRatio = bodyFontCfg.lineHeightPx / bodyFontCfg.canvasHeightPx;
 
   onUpdate(() => {
     const letterGroup = candelaFinale.letterGroup;
@@ -246,7 +344,8 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
       return;
     }
 
-    const rect = projectedRect(letterGroup);
+    const domRect = domElement.getBoundingClientRect();
+    const rect = projectedRect(letterGroup, domRect);
 
     // Reserva aproximada para el título en la parte superior (ver
     // finale.config.js → page.title: marginTopFraction + tamaño +
@@ -262,11 +361,17 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
     input.style.top = `${rect.top + topInset}px`;
     input.style.width = `${Math.max(0, rect.width - sideInset * 2)}px`;
     input.style.height = `${Math.max(0, rect.height - topInset - bottomInset)}px`;
+    input.style.fontSize = `${Math.max(8, rect.height * fontSizeRatio)}px`;
+    input.style.lineHeight = `${Math.max(10, rect.height * lineHeightRatio)}px`;
     input.classList.add("is-active");
 
     sendBtn.style.left = `${rect.left + rect.width - sideInset}px`;
     sendBtn.style.top = `${rect.top + rect.height - bottomInset * 0.55}px`;
     sendBtn.classList.add("is-active");
+
+    box.getCenter(letterCenterWorld);
+    const { vx, vy } = computeSurfaceBasis2D(letterGroup, letterCenterWorld, domRect);
+    sendBtn.style.transform = `translate(-100%, -100%) matrix(${vx.x}, ${vx.y}, ${vy.x}, ${vy.y}, 0, 0)`;
 
     statusEl.style.left = `${rect.left + rect.width / 2}px`;
     statusEl.style.top = `${rect.top + rect.height - bottomInset * 0.1}px`;

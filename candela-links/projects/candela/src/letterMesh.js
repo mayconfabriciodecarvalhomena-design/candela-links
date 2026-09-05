@@ -181,8 +181,12 @@ export function createLetterMesh(cfg, onUpdate) {
     // paintWritablePage() más abajo): repintar sobre el MISMO
     // canvas/contexto ya usado en la construcción, nunca uno nuevo por
     // pulsación de tecla — mismo criterio de "sin texturas/geometrías
-    // nuevas por frame" que el resto del archivo.
-    return { anchor, mesh, material, pageData, canvas: built.canvas, ctx: built.ctx, bodyTop: built.bodyTop };
+    // nuevas por frame" que el resto del archivo. `writeScrollTop` es el
+    // offset de scroll PERSISTENTE de esa hoja (índice de la primera
+    // línea visible; ver paintWritablePage()): se inicializa a 0 en la
+    // construcción y solo lo mueve la propia paintWritablePage() para
+    // que la línea del carenciado entre siempre en la ventana visible.
+    return { anchor, mesh, material, pageData, canvas: built.canvas, ctx: built.ctx, bodyTop: built.bodyTop, writeScrollTop: 0 };
   });
 
   // Ver comentario en la creación del material, arriba: una vez que una
@@ -701,22 +705,41 @@ function paintPageBackground(ctx, width, height, pageColorHex) {
 // Pinta el título (si lo hay) y devuelve el `bodyTop` resultante — o
 // `null` si la página no tiene título (el llamante decide entonces el
 // margen superior general, ver `textFontCfg.topMarginFraction`).
+//
+// ITERACIÓN — WRAPPING DEL TÍTULO (ver encargo: "Ahora escribe tú..."
+// quedaba parcialmente cortado). Antes era un único fillText() sin
+// comprobar el ancho disponible; ahora reutiliza wrapLines() —el
+// MISMO ajuste de línea que ya usa el cuerpo del texto, nunca una
+// segunda implementación aparte— respetando `titleCfg.maxWidthFraction`
+// (ver finale.config.js) y pudiendo ocupar 2 (o más) líneas, con
+// `titleCfg.font.lineHeightPx` como interlineado. Nunca se corta una
+// palabra a mitad: si no cabe en la línea actual pasa completa a la
+// siguiente.
 function paintTitle(ctx, title, width, height, titleCfg) {
   const hasTitle = typeof title === "string" && title.trim().length > 0;
   if (!hasTitle) return null;
 
   const tf = titleCfg.font;
-  ctx.font = `${tf.weight} ${tf.sizePx}px ${tf.family}`;
+  const font = `${tf.weight} ${tf.sizePx}px ${tf.family}`;
+  const maxWidth = width * (titleCfg.maxWidthFraction != null ? titleCfg.maxWidthFraction : 0.86);
+  const titleLines = wrapLines(ctx, title, maxWidth, font);
+  const titleLineHeight = tf.lineHeightPx || Math.round(tf.sizePx * 1.18);
+
+  ctx.font = font;
   ctx.fillStyle = tf.color;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const titleY = height * titleCfg.marginTopFraction + tf.sizePx / 2;
-  ctx.fillText(title, width / 2, titleY);
-  let afterTitle = titleY + tf.sizePx / 2;
+
+  const firstLineY = height * titleCfg.marginTopFraction + tf.sizePx / 2;
+  titleLines.forEach((line, i) => {
+    ctx.fillText(line, width / 2, firstLineY + i * titleLineHeight);
+  });
+  let afterTitle = firstLineY + (titleLines.length - 1) * titleLineHeight + tf.sizePx / 2;
 
   // Separador decorativo opcional (ver mockup del encargo: una línea
   // fina bajo el título) — horneado en la misma textura, nunca un
-  // elemento aparte.
+  // elemento aparte. Se coloca siempre tras la ÚLTIMA línea del
+  // título, sea cual sea el número de líneas que haya ocupado.
   const sep = titleCfg.separator;
   if (sep && sep.enabled) {
     const sepY = afterTitle + height * sep.gapAboveFraction;
@@ -733,32 +756,90 @@ function paintTitle(ctx, title, width, height, titleCfg) {
   return afterTitle + height * titleCfg.gapFraction;
 }
 
-// Ajuste de línea automático (word-wrap) + saltos manuales vía "\n" —
-// mismo algoritmo que ya existía en buildPageTexture(), ahora
-// compartido con paintWritablePage().
-function wrapLines(ctx, text, maxWidth, font) {
+// -----------------------------------------------------------------------
+// wrapLinesWithOffsets: ajuste de línea automático (word-wrap) + saltos
+// manuales vía "\n" — MISMO algoritmo/resultado visual que ya existía
+// (nunca se corta una palabra a la mitad), pero ahora cada línea
+// conserva también el rango [start, end) de índices de caracteres del
+// texto ORIGINAL que representa. Necesario para el cursor real (ver
+// "TEXTO LARGO: SCROLL Y CURSOR REAL" del encargo): sin este mapeo no
+// hay forma de saber en qué línea envuelta cae la posición del cursor
+// del <textarea> real.
+//
+// `wrapLines()` (usada por paintTitle()/buildPageTexture() para texto
+// estático que no necesita cursor) es ahora un envoltorio fino sobre
+// esta función — mismo resultado exacto que antes, sin duplicar el
+// algoritmo de ajuste de línea.
+// -----------------------------------------------------------------------
+function wrapLinesWithOffsets(ctx, text, maxWidth, font) {
   ctx.font = font;
-  const paragraphs = String(text || "").split("\n");
+  const raw = String(text || "");
   const lines = [];
-  for (const paragraph of paragraphs) {
-    const words = paragraph.split(" ").filter(Boolean);
+  let paragraphStart = 0;
+
+  const paragraphs = raw.split("\n");
+  paragraphs.forEach((paragraph) => {
+    // Tokeniza la línea en palabras con sus índices [start, end) DENTRO
+    // del párrafo (los espacios que las separan no pertenecen a
+    // ninguna palabra, igual que el `.filter(Boolean)` de la versión
+    // anterior los descartaba).
+    const words = [];
+    let i = 0;
+    while (i < paragraph.length) {
+      while (i < paragraph.length && paragraph[i] === " ") i++;
+      if (i >= paragraph.length) break;
+      const start = i;
+      while (i < paragraph.length && paragraph[i] !== " ") i++;
+      words.push({ text: paragraph.slice(start, i), start, end: i });
+    }
+
     if (words.length === 0) {
-      lines.push("");
-      continue;
-    }
-    let current = "";
-    for (const word of words) {
-      const candidate = current ? `${current} ${word}` : word;
-      if (current && ctx.measureText(candidate).width > maxWidth) {
-        lines.push(current);
-        current = word;
-      } else {
-        current = candidate;
+      lines.push({ text: "", start: paragraphStart, end: paragraphStart });
+    } else {
+      let current = "";
+      let curStart = words[0].start;
+      let curEnd = curStart;
+      for (const word of words) {
+        const candidate = current ? `${current} ${word.text}` : word.text;
+        if (current && ctx.measureText(candidate).width > maxWidth) {
+          lines.push({ text: current, start: paragraphStart + curStart, end: paragraphStart + curEnd });
+          current = word.text;
+          curStart = word.start;
+          curEnd = word.end;
+        } else {
+          current = candidate;
+          curEnd = word.end;
+        }
       }
+      lines.push({ text: current, start: paragraphStart + curStart, end: paragraphStart + curEnd });
     }
-    lines.push(current);
-  }
+
+    // +1 por el propio "\n" que `split("\n")` consumió y que no forma
+    // parte de ningún párrafo resultante.
+    paragraphStart += paragraph.length + 1;
+  });
+
   return lines;
+}
+
+function wrapLines(ctx, text, maxWidth, font) {
+  return wrapLinesWithOffsets(ctx, text, maxWidth, font).map((line) => line.text);
+}
+
+// Encuentra en qué línea envuelta (y en qué columna dentro de ella)
+// cae un índice de carácter del texto ORIGINAL (ver wrapLinesWithOffsets
+// más arriba) — usado para dibujar el cursor real y decidir el scroll
+// (ver paintWritablePage() más abajo).
+function locateCaret(linesWithOffsets, caretIndex) {
+  for (let i = 0; i < linesWithOffsets.length; i++) {
+    const line = linesWithOffsets[i];
+    if (caretIndex <= line.end) {
+      const col = Math.max(0, Math.min(caretIndex - line.start, line.text.length));
+      return { lineIndex: i, col };
+    }
+  }
+  const last = linesWithOffsets[linesWithOffsets.length - 1];
+  return { lineIndex: linesWithOffsets.length - 1, col: last ? last.text.length : 0 };
 }
 
 function paintBodyLines(ctx, lines, width, bodyTop, textFontCfg) {
@@ -793,15 +874,27 @@ function withAlpha(hexColor, alpha) {
 // se mueve ni se convierte en placeholder del campo — ver "EL TÍTULO
 // DE LA ÚLTIMA PÁGINA" del encargo): usa el `pageData.title` que ya
 // tenía la hoja desde su construcción, la MISMA fuente de verdad que
-// `cfg.pages` en finale.config.js.
+// `cfg.letter.pages` en finale.config.js.
 //
-// MENSAJES LARGOS (ver "MENSAJES MUY LARGOS" del encargo): la hoja
-// NUNCA crece. Si el texto envuelto ocupa más líneas de las que caben
-// en el hueco disponible (canvas.height - bodyTop - margen inferior),
-// se recortan las líneas MÁS ANTIGUAS y se muestran solo las últimas
-// — un desplazamiento interno "hacia arriba" sin scrollbar visible,
-// mostrando siempre la parte más reciente de lo que se está
-// escribiendo.
+// `options.caretIndex`: posición REAL del cursor dentro del texto
+// (índice de carácter, ver letterWriteControls.js —
+// input.selectionStart del <textarea> invisible). `options.showCursor`
+// sigue controlando solo el PARPADEO (visible/oculto), nunca la
+// posición: la posición la determina siempre `caretIndex`, nunca "el
+// final del texto" (ver "CURSOR VISUAL" del encargo — antes el cursor
+// se limitaba a añadirse al final de la cadena antes de envolver, por
+// eso se quedaba fijo ahí pasara lo que pasara).
+//
+// SCROLL (ver "TEXTO LARGO: SCROLL Y CURSOR REAL" del encargo): en vez
+// de recortar siempre las líneas más antiguas (comportamiento anterior,
+// solo válido para "seguir escribiendo al final"), ahora se mantiene un
+// `page.writeScrollTop` persistente (índice de la primera línea
+// visible) que solo se mueve lo IMPRESCINDIBLE para que la línea del
+// cursor quede dentro de la ventana visible — igual que un editor de
+// texto real: escribir al final sigue empujando la vista hacia abajo
+// (el caret sale por debajo → scrollTop sube), pero mover el cursor
+// hacia arriba con ↑/Home hace que la vista suba también, mostrando
+// líneas anteriores, nunca solo "las últimas escritas".
 // -----------------------------------------------------------------------
 function paintWritablePage(page, cfg, text, options) {
   const { canvas, ctx, bodyTop, pageData } = page;
@@ -810,6 +903,7 @@ function paintWritablePage(page, cfg, text, options) {
   const writeCfg = cfg.write || {};
   const textFontCfg = cfg.text.font;
   const showCursor = Boolean(options && options.showCursor);
+  const cursorEnabled = Boolean(writeCfg.cursor && writeCfg.cursor.enabled);
 
   const paperColorHex = `#${new THREE.Color(cfg.color).getHexString()}`;
   paintPageBackground(ctx, width, height, paperColorHex);
@@ -820,9 +914,9 @@ function paintWritablePage(page, cfg, text, options) {
   paintTitle(ctx, pageData.title, width, height, cfg.page.title);
 
   const trimmed = String(text || "");
-  const cursorChar = writeCfg.cursor && writeCfg.cursor.enabled && showCursor ? writeCfg.cursor.char || "|" : "";
+  const caretIndex = Math.max(0, Math.min(options && typeof options.caretIndex === "number" ? options.caretIndex : trimmed.length, trimmed.length));
 
-  if (!trimmed && !cursorChar && writeCfg.placeholder) {
+  if (!trimmed && !(cursorEnabled && showCursor) && writeCfg.placeholder) {
     // Vacío y sin foco (sin cursor parpadeando): se muestra el
     // placeholder, atenuado y en cursiva — nunca como si ya fuera
     // parte del mensaje enviado.
@@ -831,24 +925,71 @@ function paintWritablePage(page, cfg, text, options) {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(writeCfg.placeholder, width / 2, bodyTop + textFontCfg.lineHeightPx / 2);
+    page.writeScrollTop = 0;
     return;
   }
 
   const maxWidth = width * textFontCfg.maxWidthFraction;
   const font = `${textFontCfg.weight} ${textFontCfg.sizePx}px ${textFontCfg.family}`;
-  let lines = wrapLines(ctx, trimmed + cursorChar, maxWidth, font);
+  const lines = wrapLinesWithOffsets(ctx, trimmed, maxWidth, font);
 
   const lineHeight = textFontCfg.lineHeightPx;
   const bottomMargin = height * (writeCfg.bottomMarginFraction != null ? writeCfg.bottomMarginFraction : 0.08);
   const availableHeight = Math.max(lineHeight, height - bodyTop - bottomMargin);
   const maxLines = Math.max(1, Math.floor(availableHeight / lineHeight));
-  if (lines.length > maxLines) {
-    // Recorte de cola: se conservan las últimas `maxLines` líneas
-    // (lo más reciente escrito), nunca las primeras — ver cabecera.
-    lines = lines.slice(lines.length - maxLines);
-  }
 
-  paintBodyLines(ctx, lines, width, bodyTop, textFontCfg);
+  const { lineIndex: caretLine, col: caretCol } = locateCaret(lines, caretIndex);
+
+  // Scroll persistente por hoja (ver cabecera de la función): solo se
+  // ajusta lo justo para que `caretLine` vuelva a estar dentro de la
+  // ventana [scrollTop, scrollTop + maxLines - 1] — nunca se recentra
+  // en cada repintado.
+  let scrollTop = page.writeScrollTop || 0;
+  if (caretLine < scrollTop) {
+    scrollTop = caretLine;
+  } else if (caretLine > scrollTop + maxLines - 1) {
+    scrollTop = caretLine - maxLines + 1;
+  }
+  const maxScrollTop = Math.max(0, lines.length - maxLines);
+  scrollTop = Math.max(0, Math.min(scrollTop, maxScrollTop));
+  page.writeScrollTop = scrollTop;
+
+  const visibleLines = lines.slice(scrollTop, scrollTop + maxLines);
+  paintBodyLines(
+    ctx,
+    visibleLines.map((line) => line.text),
+    width,
+    bodyTop,
+    textFontCfg
+  );
+
+  // ---- Cursor real (ver cabecera de la función): una barra vertical
+  // dibujada en la posición EXACTA de `caretIndex`, nunca al final del
+  // texto salvo que el cursor esté de verdad ahí. Solo se dibuja si
+  // está dentro de la ventana visible actual (si no, el scroll de
+  // arriba ya se ha encargado de traerla a la vista). ----
+  if (showCursor && cursorEnabled) {
+    const visibleCaretLine = caretLine - scrollTop;
+    if (visibleCaretLine >= 0 && visibleCaretLine < visibleLines.length) {
+      const caretLineText = lines[caretLine].text;
+      const before = caretLineText.slice(0, caretCol);
+
+      ctx.font = font;
+      ctx.textAlign = "left";
+      const fullLineWidth = ctx.measureText(caretLineText).width;
+      const beforeWidth = ctx.measureText(before).width;
+      const lineLeftX = width / 2 - fullLineWidth / 2;
+      const caretX = lineLeftX + beforeWidth;
+      const caretY = bodyTop + lineHeight / 2 + visibleCaretLine * lineHeight;
+
+      ctx.strokeStyle = textFontCfg.color;
+      ctx.lineWidth = Math.max(1, textFontCfg.sizePx * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(caretX, caretY - lineHeight * 0.38);
+      ctx.lineTo(caretX, caretY + lineHeight * 0.38);
+      ctx.stroke();
+    }
+  }
 }
 
 function clamp01(v) {

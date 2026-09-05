@@ -640,11 +640,26 @@ export const FINALE_CONFIG = {
       //
       // ITERACIÓN — REDISEÑO (ver encargo: "el título debe tener un
       // tamaño MAYOR que el texto normal" — antes 40px de título contra
-      // 46px de cuerpo, exactamente al revés). `sizePx` sube a 52
-      // (ahora claramente mayor que `text.font.sizePx` = 34, más
-      // abajo). Se añade `separator`: una línea fina decorativa bajo
+      // 46px de cuerpo, exactamente al revés). `sizePx` sube a 44
+      // (claramente mayor que `text.font.sizePx` = 27, más abajo — la
+      // jerarquía título/cuerpo se mantiene pese a que ambos han
+      // bajado). Se añade `separator`: una línea fina decorativa bajo
       // el título (ver mockup del encargo), horneada en la misma
       // textura — nunca un elemento aparte.
+      //
+      // ITERACIÓN — WRAPPING DEL TÍTULO + AJUSTE DE TAMAÑOS (ver
+      // encargo: "Ahora escribe tú..." quedaba parcialmente cortado
+      // por ser demasiado grande para el ancho disponible). Dos
+      // cambios:
+      //   1. `sizePx` baja de 52 a 44 — reducción ligera, no drástica
+      //      (ver "reduce ligeramente el tamaño del título").
+      //   2. Se añade `maxWidthFraction` (nueva, antes el título no
+      //      tenía ajuste de línea propio — se dibujaba con un único
+      //      fillText() sin comprobar el ancho, ver letterMesh.js →
+      //      paintTitle()) y `lineHeightPx` para el interlineado
+      //      cuando ocupa 2 líneas — ver "TÍTULO DE LA ÚLTIMA PÁGINA"
+      //      del encargo: nunca se corta, nunca se reduce a un tamaño
+      //      diminuto solo para caber en una línea, puede ocupar 2.
       title: {
         // Margen superior antes del título, y separación entre el
         // título (o el separador, si existe) y el texto que viene
@@ -655,10 +670,24 @@ export const FINALE_CONFIG = {
         // carta).
         marginTopFraction: 0.09,
         gapFraction: 0.05,
+        // Fracción del ancho del canvas disponible para el ajuste de
+        // línea del título (mismo criterio que `text.font.
+        // maxWidthFraction` más abajo, pero algo más generoso: el
+        // título es corto — normalmente 1-2 palabras más una elipsis
+        // — así que puede aprovechar casi todo el ancho de la hoja
+        // respetando el mismo margen lateral visual que el resto de
+        // la composición).
+        maxWidthFraction: 0.84,
         font: {
           family: "Georgia, 'Times New Roman', serif",
           weight: "bold",
-          sizePx: 52,
+          sizePx: 44,
+          // Interlineado cuando el título ocupa más de una línea (ver
+          // paintTitle() en letterMesh.js) — mismo criterio
+          // proporcional que `text.font.lineHeightPx` (≈1.15-1.2× el
+          // tamaño de fuente para una lectura cómoda, sin quedar
+          // apretado ni demasiado separado).
+          lineHeightPx: 52,
           color: "#3d2a17",
         },
         // Línea fina decorativa bajo el título, centrada — marca con
@@ -789,10 +818,22 @@ export const FINALE_CONFIG = {
       font: {
         // Georgia: misma familia que ya usa flameWords.config.js para
         // coherencia tipográfica en todo el proyecto.
+        //
+        // ITERACIÓN — TIPOGRAFÍA MÁS ELEGANTE (ver encargo: "el
+        // cuerpo de texto me parece demasiado grande... no quiero que
+        // parezca texto de una interfaz"). `sizePx` baja de 34 a 27 —
+        // una reducción notable pero no exagerada — y `lineHeightPx`
+        // baja de 44 a 35 en la misma proporción, para que el
+        // interlineado siga sintiéndose natural (≈1.3× el tamaño de
+        // fuente, igual ratio que antes). El título (44px, ver arriba)
+        // sigue siendo claramente mayor — la diferencia (44 vs 27,
+        // ≈1.6×) es incluso algo más marcada que antes (52 vs 34,
+        // ≈1.5×), así que la jerarquía título/cuerpo se mantiene
+        // intacta pese a que ambos han bajado de tamaño.
         family: "Georgia, 'Times New Roman', serif",
         weight: "normal",
-        sizePx: 34,
-        lineHeightPx: 44,
+        sizePx: 27,
+        lineHeightPx: 35,
         color: "#3d2a17",
         // Resolución del canvas oculto usado para generar la textura
         // (alto en píxeles; el ancho se calcula a partir de esto y de
