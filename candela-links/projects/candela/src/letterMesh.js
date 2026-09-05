@@ -862,6 +862,60 @@ function withAlpha(hexColor, alpha) {
   return `rgba(${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)}, ${alpha})`;
 }
 
+// Dibuja la barra vertical del cursor en un punto concreto del canvas
+// — misma pieza reutilizada tanto si la hoja está vacía (cursor en la
+// primera línea, columna 0) como si ya tiene texto (cursor en la
+// posición real de `caretIndex`, ver paintWritablePage() más abajo).
+// Nunca depende de ningún temporizador: quien decide si se dibuja o no
+// es siempre `showCursor`, que ahora es estable (ver letterWriteControls.js
+// — "showCursor: isFocused", sin parpadeo).
+function drawCaretBar(ctx, x, y, lineHeight, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1, lineHeight * 0.045);
+  ctx.beginPath();
+  ctx.moveTo(x, y - lineHeight * 0.38);
+  ctx.lineTo(x, y + lineHeight * 0.38);
+  ctx.stroke();
+}
+
+// -----------------------------------------------------------------------
+// paintPlaceholder: texto fantasma que invita a escribir mientras la
+// hoja está vacía (ver "PLACEHOLDER" del encargo). Reutiliza el MISMO
+// wrapLines() que el cuerpo del texto — nunca se corta ni sale de la
+// hoja, puede ocupar varias líneas — y se recorta (sin scroll propio,
+// no lo necesita: siempre está anclado arriba) a las líneas que caben
+// en el hueco disponible, igual criterio que el cuerpo real.
+//
+// ITERACIÓN — DESACOPLADO DEL CURSOR (ver "DIFERENCIAR PLACEHOLDER Y
+// CURSOR" del encargo: "el parpadeo actual puede estar relacionado con
+// el placeholder"). Antes esta función ni existía como pieza aparte:
+// el placeholder se pintaba solo cuando `showCursor` era falso, y como
+// `showCursor` parpadeaba (ver iteración anterior de
+// letterWriteControls.js), el placeholder aparecía y desaparecía con
+// él. Ahora se pinta SIEMPRE que el texto esté vacío,
+// independientemente del foco o del cursor — se decide en
+// paintWritablePage() únicamente en función de `trimmed.length === 0`.
+// -----------------------------------------------------------------------
+function paintPlaceholder(ctx, placeholder, width, height, bodyTop, textFontCfg, writeCfg) {
+  const maxWidth = width * textFontCfg.maxWidthFraction;
+  const font = `italic ${textFontCfg.weight} ${textFontCfg.sizePx}px ${textFontCfg.family}`;
+  const lines = wrapLines(ctx, placeholder, maxWidth, font);
+
+  const lineHeight = textFontCfg.lineHeightPx;
+  const bottomMargin = height * (writeCfg.bottomMarginFraction != null ? writeCfg.bottomMarginFraction : 0.08);
+  const availableHeight = Math.max(lineHeight, height - bodyTop - bottomMargin);
+  const maxLines = Math.max(1, Math.floor(availableHeight / lineHeight));
+  const visible = lines.slice(0, maxLines);
+
+  ctx.font = font;
+  ctx.fillStyle = withAlpha(textFontCfg.color, 0.45);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  visible.forEach((line, i) => {
+    ctx.fillText(line, width / 2, bodyTop + lineHeight / 2 + i * lineHeight);
+  });
+}
+
 // -----------------------------------------------------------------------
 // paintWritablePage: repinta la textura de la ÚLTIMA hoja mientras el
 // usuario escribe (ver setWritableDraft() más arriba). Reutiliza
@@ -879,11 +933,20 @@ function withAlpha(hexColor, alpha) {
 // `options.caretIndex`: posición REAL del cursor dentro del texto
 // (índice de carácter, ver letterWriteControls.js —
 // input.selectionStart del <textarea> invisible). `options.showCursor`
-// sigue controlando solo el PARPADEO (visible/oculto), nunca la
-// posición: la posición la determina siempre `caretIndex`, nunca "el
-// final del texto" (ver "CURSOR VISUAL" del encargo — antes el cursor
-// se limitaba a añadirse al final de la cadena antes de envolver, por
-// eso se quedaba fijo ahí pasara lo que pasara).
+// indica simplemente si el campo tiene el foco (ver
+// letterWriteControls.js: "showCursor: isFocused", SIN ningún
+// parpadeo desde esta iteración — ver "CURSOR DE ESCRITURA: NO QUIERO
+// QUE PARPADEE" del encargo) — nunca controla la POSICIÓN, que
+// siempre determina `caretIndex`.
+//
+// PLACEHOLDER (ver "DIFERENCIAR PLACEHOLDER Y CURSOR"/"PLACEHOLDER"
+// del encargo): se pinta (con su propio word-wrap, ver
+// paintPlaceholder() arriba) siempre que el texto esté vacío, sea
+// cual sea el estado del foco/cursor — desaparece en cuanto hay UN
+// solo carácter escrito, nunca antes ni depende de ningún temporizador.
+// El cursor, en ese mismo caso de hoja vacía, se dibuja aparte (si
+// `showCursor` está activo) en la primera línea/columna 0 — ambos
+// coexisten sin relación entre sí.
 //
 // SCROLL (ver "TEXTO LARGO: SCROLL Y CURSOR REAL" del encargo): en vez
 // de recortar siempre las líneas más antiguas (comportamiento anterior,
@@ -916,15 +979,17 @@ function paintWritablePage(page, cfg, text, options) {
   const trimmed = String(text || "");
   const caretIndex = Math.max(0, Math.min(options && typeof options.caretIndex === "number" ? options.caretIndex : trimmed.length, trimmed.length));
 
-  if (!trimmed && !(cursorEnabled && showCursor) && writeCfg.placeholder) {
-    // Vacío y sin foco (sin cursor parpadeando): se muestra el
-    // placeholder, atenuado y en cursiva — nunca como si ya fuera
-    // parte del mensaje enviado.
-    ctx.font = `italic ${textFontCfg.weight} ${textFontCfg.sizePx}px ${textFontCfg.family}`;
-    ctx.fillStyle = withAlpha(textFontCfg.color, 0.45);
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(writeCfg.placeholder, width / 2, bodyTop + textFontCfg.lineHeightPx / 2);
+  if (!trimmed) {
+    // Hoja vacía: placeholder (si lo hay) SIEMPRE visible, cursor
+    // (si corresponde) dibujado aparte en la primera línea — ver
+    // cabecera de la función, "PLACEHOLDER" más arriba.
+    if (writeCfg.placeholder) {
+      paintPlaceholder(ctx, writeCfg.placeholder, width, height, bodyTop, textFontCfg, writeCfg);
+    }
+    if (showCursor && cursorEnabled) {
+      const lineHeight = textFontCfg.lineHeightPx;
+      drawCaretBar(ctx, width / 2, bodyTop + lineHeight / 2, lineHeight, textFontCfg.color);
+    }
     page.writeScrollTop = 0;
     return;
   }
@@ -982,12 +1047,7 @@ function paintWritablePage(page, cfg, text, options) {
       const caretX = lineLeftX + beforeWidth;
       const caretY = bodyTop + lineHeight / 2 + visibleCaretLine * lineHeight;
 
-      ctx.strokeStyle = textFontCfg.color;
-      ctx.lineWidth = Math.max(1, textFontCfg.sizePx * 0.06);
-      ctx.beginPath();
-      ctx.moveTo(caretX, caretY - lineHeight * 0.38);
-      ctx.lineTo(caretX, caretY + lineHeight * 0.38);
-      ctx.stroke();
+      drawCaretBar(ctx, caretX, caretY, lineHeight, textFontCfg.color);
     }
   }
 }

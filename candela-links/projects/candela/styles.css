@@ -186,43 +186,62 @@ body {
   pointer-events: auto;
 }
 
-/* Botón "Enviar": discreto, mismo lenguaje tipográfico que el resto de
-   la carta — nunca un botón moderno de aplicación web (sin relleno
-   sólido, sin borde rectangular). */
+/* Botón "Enviar": integrado con la carta (mismo dorado que ya usa el
+   separador bajo el título, ver finale.config.js →
+   letter.page.title.separator.color) — no es un botón moderno de
+   aplicación web (sin esquinas muy marcadas, sin sombra dura), pero
+   SÍ necesita contraste real sobre el papel para leerse con claridad.
+   Ver ITERACIÓN — CONTRASTE Y TIPOGRAFÍA más abajo. */
 .letter-write-send {
   position: fixed;
   top: 0;
   left: 0;
   transform: translate(-100%, -100%);
+  transform-origin: 100% 100%;
   margin: 0;
-  padding: 0.3em 0.9em;
+  padding: 0.32em 0.85em;
   border: none;
-  background: transparent;
   appearance: none;
-  color: #6b4a26;
   font-family: Georgia, "Times New Roman", serif;
   font-style: italic;
-  font-size: 0.95rem;
-  letter-spacing: 0.05em;
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.4s ease, color 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.4s ease, background-color 0.2s ease, transform 0.2s ease;
   z-index: 10000;
+
+  /* ITERACIÓN — CONTRASTE Y TIPOGRAFÍA (ver encargo: "poco contraste,
+     cuesta verlo... tipografía tampoco se integra bien"). Antes era
+     texto sin fondo (color #6b4a26 sobre el papel #f7edd8 — apenas
+     0.28 de opacidad de sello, ilegible). Ahora un pequeño sello de
+     cera/lacre discreto: fondo dorado cálido (mismo tono que el
+     separador del título, `#c9a468`) semitransparente, borde fino a
+     juego y texto en el MISMO marrón oscuro que el resto del texto de
+     la carta (`#3d2a17`, ver letter.text.font.color) — coherente con
+     la paleta ya existente, con contraste real, sin parecer un botón
+     de interfaz genérico. */
+  background: rgba(201, 164, 104, 0.82);
+  border: 1px solid rgba(107, 74, 38, 0.55);
+  border-radius: 3px;
+  color: #3d2a17;
+  box-shadow: 0 1px 3px rgba(61, 42, 23, 0.3);
+  text-shadow: 0 1px 0 rgba(255, 250, 235, 0.35);
 }
 
 .letter-write-send.is-active {
-  opacity: 0.7;
+  opacity: 0.92;
   pointer-events: auto;
 }
 
 .letter-write-send.is-active:hover {
   opacity: 1;
-  color: #4a3117;
+  background: rgba(201, 164, 104, 0.95);
 }
 
 .letter-write-send:disabled {
-  opacity: 0.3 !important;
+  opacity: 0.38 !important;
   pointer-events: none;
   cursor: default;
 }

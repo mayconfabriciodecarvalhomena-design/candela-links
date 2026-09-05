@@ -649,17 +649,24 @@ export const FINALE_CONFIG = {
       //
       // ITERACIÓN — WRAPPING DEL TÍTULO + AJUSTE DE TAMAÑOS (ver
       // encargo: "Ahora escribe tú..." quedaba parcialmente cortado
-      // por ser demasiado grande para el ancho disponible). Dos
-      // cambios:
-      //   1. `sizePx` baja de 52 a 44 — reducción ligera, no drástica
-      //      (ver "reduce ligeramente el tamaño del título").
-      //   2. Se añade `maxWidthFraction` (nueva, antes el título no
-      //      tenía ajuste de línea propio — se dibujaba con un único
-      //      fillText() sin comprobar el ancho, ver letterMesh.js →
-      //      paintTitle()) y `lineHeightPx` para el interlineado
-      //      cuando ocupa 2 líneas — ver "TÍTULO DE LA ÚLTIMA PÁGINA"
-      //      del encargo: nunca se corta, nunca se reduce a un tamaño
-      //      diminuto solo para caber en una línea, puede ocupar 2.
+      // por ser demasiado grande para el ancho disponible). Se añade
+      // `maxWidthFraction` (nueva, antes el título no tenía ajuste de
+      // línea propio — se dibujaba con un único fillText() sin
+      // comprobar el ancho, ver letterMesh.js → paintTitle()) y
+      // `lineHeightPx` para el interlineado cuando ocupa 2 líneas —
+      // ver "TÍTULO DE LA ÚLTIMA PÁGINA" del encargo: nunca se corta,
+      // nunca se reduce a un tamaño diminuto solo para caber en una
+      // línea, puede ocupar 2.
+      //
+      // ITERACIÓN — AJUSTE GENERAL DE TIPOGRAFÍA (ver encargo: "quiero
+      // reducir el tamaño de TODOS los títulos... el resultado debe
+      // sentirse más delicado, como una carta real"). `sizePx` baja de
+      // 44 a 36 y `lineHeightPx` de 52 a 44, en la misma proporción
+      // (≈1.2×). Esta es la ÚNICA configuración de título de TODA la
+      // carta (ver `pages` arriba: cada hoja usa `pageCfg.title`, este
+      // mismo objeto) — cambiarla aquí reduce a la vez los títulos de
+      // las hojas 1-4 Y el título de la última hoja ("Ahora escribe
+      // tú..."), nunca por separado.
       title: {
         // Margen superior antes del título, y separación entre el
         // título (o el separador, si existe) y el texto que viene
@@ -681,13 +688,13 @@ export const FINALE_CONFIG = {
         font: {
           family: "Georgia, 'Times New Roman', serif",
           weight: "bold",
-          sizePx: 44,
+          sizePx: 36,
           // Interlineado cuando el título ocupa más de una línea (ver
           // paintTitle() en letterMesh.js) — mismo criterio
-          // proporcional que `text.font.lineHeightPx` (≈1.15-1.2× el
+          // proporcional que `text.font.lineHeightPx` (≈1.2× el
           // tamaño de fuente para una lectura cómoda, sin quedar
           // apretado ni demasiado separado).
-          lineHeightPx: 52,
+          lineHeightPx: 44,
           color: "#3d2a17",
         },
         // Línea fina decorativa bajo el título, centrada — marca con
@@ -745,14 +752,23 @@ export const FINALE_CONFIG = {
       // siempre la parte más reciente de lo escrito).
       bottomMarginFraction: 0.08,
 
-      // Cursor parpadeante mientras el campo tiene el foco (ver
-      // letterWriteControls.js) — refuerza la sensación de estar
-      // escribiendo de verdad sobre el papel, no solo viendo un
-      // resultado estático.
+      // Cursor visual sobre la hoja (ver letterMesh.js →
+      // paintWritablePage()) — una barra vertical estable en la
+      // posición real de `selectionStart`, mientras el campo tiene el
+      // foco.
+      //
+      // ITERACIÓN — SIN PARPADEO (ver encargo: "no quiero que
+      // parpadee... debe ser estable"). Antes existía `blinkMs`
+      // (intervalo de parpadeo) y `char` (un carácter "|" pensado para
+      // una implementación anterior que insertaba el cursor como texto
+      // — ya no se usa, el cursor se dibuja como trazo, ver
+      // paintWritablePage()); ambos se retiran por no tener ya ningún
+      // efecto: el parpadeo se controlaba en letterWriteControls.js
+      // con un setInterval que se ha eliminado por completo, no solo
+      // "ralentizado" — `enabled: false` sigue permitiendo desactivar
+      // el cursor del todo si hiciera falta en el futuro.
       cursor: {
         enabled: true,
-        blinkMs: 530,
-        char: "|",
       },
 
       // Endpoint YA existente (ver api/message.js) — se reutiliza tal
@@ -819,21 +835,22 @@ export const FINALE_CONFIG = {
         // Georgia: misma familia que ya usa flameWords.config.js para
         // coherencia tipográfica en todo el proyecto.
         //
-        // ITERACIÓN — TIPOGRAFÍA MÁS ELEGANTE (ver encargo: "el
-        // cuerpo de texto me parece demasiado grande... no quiero que
-        // parezca texto de una interfaz"). `sizePx` baja de 34 a 27 —
-        // una reducción notable pero no exagerada — y `lineHeightPx`
-        // baja de 44 a 35 en la misma proporción, para que el
-        // interlineado siga sintiéndose natural (≈1.3× el tamaño de
-        // fuente, igual ratio que antes). El título (44px, ver arriba)
-        // sigue siendo claramente mayor — la diferencia (44 vs 27,
-        // ≈1.6×) es incluso algo más marcada que antes (52 vs 34,
-        // ≈1.5×), así que la jerarquía título/cuerpo se mantiene
-        // intacta pese a que ambos han bajado de tamaño.
+        // ITERACIÓN — SEGUNDA PASADA DE AJUSTE GENERAL (ver encargo:
+        // "quiero reducir el tamaño de TODOS los textos de las
+        // hojas... el resultado debe sentirse más delicado, como una
+        // carta real"). `sizePx` baja de 27 a 22 y `lineHeightPx` de
+        // 35 a 29, misma proporción (~1.32×) que antes. Esta es la
+        // ÚNICA configuración de cuerpo de TODA la carta — la usan
+        // tanto las hojas 1-4 (buildPageTexture()) como el texto
+        // escrito y el placeholder de la última hoja
+        // (paintWritablePage()), así que la reducción es coherente en
+        // todo el documento sin tocar nada por separado. Frente al
+        // título (36px, ver arriba), la proporción título/cuerpo
+        // (36/22 ≈ 1.64×) se mantiene tan marcada como antes.
         family: "Georgia, 'Times New Roman', serif",
         weight: "normal",
-        sizePx: 27,
-        lineHeightPx: 35,
+        sizePx: 22,
+        lineHeightPx: 29,
         color: "#3d2a17",
         // Resolución del canvas oculto usado para generar la textura
         // (alto en píxeles; el ancho se calcula a partir de esto y de

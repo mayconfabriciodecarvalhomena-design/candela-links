@@ -103,29 +103,19 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
   }
 
   // ---- Repintado de la hoja (ver candelaFinale.setPageDraft() →
-  // letterMesh.js → paintWritablePage()) + parpadeo del cursor
-  // mientras el campo tiene el foco (ver "CRITERIO DE CALIDAD" del
-  // encargo: que se sienta como estar escribiendo de verdad). ----
-  let cursorOn = true;
-  let cursorTimer = null;
-
+  // letterMesh.js → paintWritablePage()).
+  //
+  // ITERACIÓN — CURSOR ESTABLE, SIN PARPADEO (ver encargo: "no quiero
+  // que parpadee... debe ser estable"). Antes había un
+  // `setInterval()` que alternaba `cursorOn` para hacer parpadear la
+  // barra — ESE era también el origen del parpadeo del placeholder
+  // (ver letterMesh.js → paintWritablePage(): el placeholder se
+  // ocultaba/mostraba en función de ese mismo `showCursor` que
+  // oscilaba). Se retira por completo: `showCursor` ahora es
+  // simplemente `isFocused` — verdadero mientras el campo tiene el
+  // foco, sin ninguna oscilación en el tiempo. ----
   function redraw() {
-    candelaFinale.setPageDraft(draft, { caretIndex, showCursor: isFocused && cursorOn });
-  }
-
-  function startCursorBlink() {
-    stopCursorBlink();
-    cursorOn = true;
-    const blinkMs = (cfg.cursor && cfg.cursor.blinkMs) || 530;
-    cursorTimer = setInterval(() => {
-      cursorOn = !cursorOn;
-      redraw();
-    }, blinkMs);
-  }
-
-  function stopCursorBlink() {
-    if (cursorTimer) clearInterval(cursorTimer);
-    cursorTimer = null;
+    candelaFinale.setPageDraft(draft, { caretIndex, showCursor: isFocused });
   }
 
   // -----------------------------------------------------------------------
@@ -148,13 +138,11 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
 
   input.addEventListener("focus", () => {
     isFocused = true;
-    startCursorBlink();
     syncFromInput();
   });
 
   input.addEventListener("blur", () => {
     isFocused = false;
-    stopCursorBlink();
     redraw();
   });
 
@@ -279,6 +267,23 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
   // cámara, SIN cambiar el tamaño del botón (los vectores se
   // normalizan a longitud 1 antes de usarlos: solo aportan dirección,
   // nunca escala) — nunca "un botón gigante ni llamativo".
+  //
+  // ITERACIÓN — CORRECCIÓN DEL BOTÓN INVERTIDO (ver encargo: "el
+  // botón aparece del revés/invertido"). El eje Y local de un elemento
+  // HTML sin transformar apunta hacia ABAJO en pantalla (convención
+  // CSS estándar: (0,1) = abajo), pero la versión anterior usaba
+  // `axisY = (0, 1, 0)` en espacio de MUNDO — que en esta escena es
+  // "arriba" (ver candelaFinale.js: `letterUp` = eje vertical del
+  // mundo) — para representar precisamente esa dirección "hacia
+  // abajo" del botón. Resultado: el eje vertical del botón quedaba
+  // invertido respecto al eje vertical real de la hoja, produciendo
+  // una reflexión (espejo verticaL) en vez de una simple
+  // rotación/cizalla — de ahí el efecto "del revés". La corrección es
+  // usar `axisY = (0, -1, 0)` (el "abajo" del mundo, que es lo mismo
+  // que el "abajo" de la propia hoja al no tener rotación propia en
+  // reposo) para que el eje Y local del botón (abajo) se corresponda
+  // con el eje Y real "hacia abajo" de la hoja — una rotación/cizalla
+  // sin ningún espejo, con el texto "Enviar" legible con normalidad.
   // -----------------------------------------------------------------------
   const worldQuaternion = new THREE.Quaternion();
   const axisX = new THREE.Vector3();
@@ -288,7 +293,10 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
   function computeSurfaceBasis2D(object3D, originWorld, rect) {
     object3D.getWorldQuaternion(worldQuaternion);
     axisX.set(1, 0, 0).applyQuaternion(worldQuaternion);
-    axisY.set(0, 1, 0).applyQuaternion(worldQuaternion);
+    // (0, -1, 0): el "abajo" de la hoja, no el "arriba" — ver nota de
+    // la iteración arriba. Este es el único cambio que corrige la
+    // inversión del botón.
+    axisY.set(0, -1, 0).applyQuaternion(worldQuaternion);
 
     const originScreen = projectToScreen(originWorld, rect);
     const xScreen = projectToScreen(
@@ -378,7 +386,6 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
   });
 
   function dispose() {
-    stopCursorBlink();
     clearTimeout(statusTimeout);
     sendBtn.removeEventListener("click", handleSend);
     input.remove();
