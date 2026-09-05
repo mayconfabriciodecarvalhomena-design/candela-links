@@ -23,12 +23,20 @@ import { createIntroParticles } from "./introParticles.js";
 // `setLoadingProgress(0-100)` (actualiza la etiqueta "CARGANDO ESCENA
 // X%") y `setReady(bool)` (la sustituye por "CARGAR ESCENA" y habilita
 // el botón). No hay ningún temporizador ni contador artificial aquí
-// dentro: los números que se muestran son siempre los que main.js le
-// pasa.
+//
+// ---- Botón opcional "SALTAR ANIMACIÓN" (createIntro({ showSkip })) ----
+// Si `showSkip` es true (main.js decide esto consultando
+// src/skipIntro.js → hasVisitedBefore()), se crea un segundo botón junto
+// al de "CARGAR ESCENA", con el mismo aspecto (misma clase `.intro-button`,
+// así que hereda tal cual su aparición/estado `.is-ready` — no hace
+// falta CSS nuevo) y su propio listener `onSkip(callback)`, simétrico a
+// `onStart`. Si `showSkip` es false (primera visita), el botón
+// directamente no se crea — no es una cuestión de ocultarlo con CSS.
 // -----------------------------------------------------------------------
 
-export function createIntro() {
+export function createIntro(options = {}) {
   const content = CONTENT.intro ?? {};
+  const showSkip = Boolean(options.showSkip);
 
   const overlay = document.createElement("div");
   overlay.className = "intro-overlay";
@@ -122,7 +130,24 @@ export function createIntro() {
   buttonLabel.className = "intro-button-label";
   button.appendChild(buttonLabel);
 
+  // ---- Botón "SALTAR ANIMACIÓN" (opcional) ----
+  // Misma clase `.intro-button` que el botón principal a propósito: así
+  // reutiliza sin cambios su aparición escalonada y su estado
+  // `.is-ready` (ver styles.css) — la única diferencia visual es el
+  // texto y que vive debajo, dentro del mismo `.intro-content` (que ya
+  // los separa con su `gap` existente). `intro-button--skip` es solo un
+  // gancho para el CSS/JS de este módulo, no cambia el aspecto.
+  let skipButton = null;
+  if (showSkip) {
+    skipButton = document.createElement("button");
+    skipButton.type = "button";
+    skipButton.className = "intro-button intro-button--skip";
+    skipButton.disabled = true; // hasta que setReady(true) — igual que el principal
+    skipButton.textContent = content.skipButtonLabel ?? "SALTAR ANIMACIÓN";
+  }
+
   contentEl.append(titleWrap, meaning, button);
+  if (skipButton) contentEl.append(skipButton);
   overlay.append(frame, question, contentEl);
   document.body.appendChild(overlay);
 
@@ -169,6 +194,26 @@ export function createIntro() {
   }
 
   button.addEventListener("click", handleClick);
+
+  // ---- "SALTAR ANIMACIÓN" ----
+  // Comparte a propósito el mismo flag `started` que el botón principal
+  // (una sola entrada real por visita, sea cual sea el botón pulsado) y
+  // el mismo guard `!ready` — no se puede pulsar antes de que la escena
+  // esté realmente cargada, igual que "CARGAR ESCENA".
+  const skipListeners = new Set();
+
+  function onSkip(callback) {
+    skipListeners.add(callback);
+    return () => skipListeners.delete(callback);
+  }
+
+  function handleSkipClick() {
+    if (!ready || started) return;
+    started = true;
+    skipListeners.forEach((callback) => callback());
+  }
+
+  if (skipButton) skipButton.addEventListener("click", handleSkipClick);
 
   // ---- "Composición asentada" ----
   // El botón es, por diseño, el último elemento en aparecer (ver el
@@ -249,6 +294,10 @@ export function createIntro() {
     ready = Boolean(isReady);
     button.disabled = !ready;
     button.classList.toggle("is-ready", ready);
+    if (skipButton) {
+      skipButton.disabled = !ready;
+      skipButton.classList.toggle("is-ready", ready);
+    }
 
     if (becomingReady) {
       buttonLabel.classList.add("is-swapping");
@@ -283,5 +332,5 @@ export function createIntro() {
     );
   }
 
-  return { setReady, setLoadingProgress, onStart, onCompositionSettled, fadeOutAndDestroy };
+  return { setReady, setLoadingProgress, onStart, onSkip, onCompositionSettled, fadeOutAndDestroy };
 }

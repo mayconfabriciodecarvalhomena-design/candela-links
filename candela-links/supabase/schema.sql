@@ -41,6 +41,23 @@ create table if not exists messages (
 );
 
 -- ---------------------------------------------------------
+-- Visitas a Candela (ver /api/visit.js y projects/candela/src/visits.js)
+-- Una fila = una entrada real a la experiencia (pulsar "CARGAR ESCENA" o
+-- "SALTAR ANIMACIÓN"), nunca una interacción interna. Sin datos
+-- personales: solo el enlace usado (opcional, sin FK estricta a `links`
+-- para que un registro nunca pueda bloquear el guardado de una visita
+-- por un desajuste puntual de slug) y un identificador de sesión
+-- efímero, generado en el navegador y no persistido en ningún otro
+-- sitio, solo para poder distinguir eventos entre sí si hiciera falta.
+-- ---------------------------------------------------------
+create table if not exists visits (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz default now(),
+  link_slug text,
+  session_id text
+);
+
+-- ---------------------------------------------------------
 -- Lista blanca de administradores (solo tú)
 -- ---------------------------------------------------------
 create table if not exists admins (
@@ -68,6 +85,7 @@ alter table projects enable row level security;
 alter table links enable row level security;
 alter table messages enable row level security;
 alter table admins enable row level security;
+alter table visits enable row level security;
 
 drop policy if exists "admin_all_projects" on projects;
 create policy "admin_all_projects" on projects
@@ -80,6 +98,13 @@ create policy "admin_all_links" on links
 drop policy if exists "admin_all_messages" on messages;
 create policy "admin_all_messages" on messages
   for all using (is_admin()) with check (is_admin());
+
+-- visits: mismo criterio que "admins" — nadie puede leer/escribir desde
+-- el cliente (ni siquiera un admin autenticado); solo el servidor
+-- (clave de servicio, que salta RLS por diseño de Supabase) inserta
+-- desde /api/visit.js. Si algún día quieres consultarlas desde el panel
+-- de admin, añade aquí una política de solo lectura para is_admin() —
+-- de momento no hace falta ninguna.
 
 -- admins: nadie puede leer/escribir esta tabla desde el cliente,
 -- ni siquiera un admin autenticado (se gestiona a mano desde el SQL editor).

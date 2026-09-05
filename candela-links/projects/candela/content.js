@@ -25,6 +25,10 @@ export const CONTENT = {
 
 
     buttonLabel: "CARGAR ESCENA",
+    // Texto del botón opcional "saltar animación" (ver src/intro.js,
+    // createIntro({ showSkip })): solo se crea/usa cuando
+    // src/skipIntro.js detecta una visita anterior en este navegador.
+    skipButtonLabel: "SALTAR ANIMACIÓN",
     // Mientras la escena todavía se está preparando, el botón muestra
     // este texto seguido del porcentaje real de carga (p. ej.
     // "CARGANDO ESCENA 42%"). En cuanto termina, se sustituye por

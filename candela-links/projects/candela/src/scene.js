@@ -96,6 +96,43 @@ export function onUpdate(callback) {
   updateCallbacks.push(callback);
 }
 
+// -----------------------------------------------------------------------
+// fastForward(totalSeconds, step): avanza TODOS los sistemas ya
+// registrados en `updateCallbacks` (llama, sobre, carta, candelaFinale,
+// flameWords, gato...) con deltas sintéticos, en vez de esperar a los
+// deltas reales de `animate()` — reutiliza el mismo array y el mismo
+// mecanismo, no crea ninguna animación paralela ni ningún estado nuevo.
+//
+// Pensado para "Saltar animación" (ver src/skipIntro.js): permite que la
+// propia máquina de estados de cada sistema llegue a su estado final
+// real (el que ya calcula su propio código), solo que en una fracción de
+// segundo en vez de en tiempo real.
+//
+// A propósito NO llama a `renderer.render()` en ningún momento: los
+// fotogramas intermedios de este avance sintético nunca se pintan en
+// pantalla — el usuario solo verá el resultado ya asentado en el
+// siguiente `requestAnimationFrame` real de `animate()`, exactamente
+// igual que si hubiera esperado a que la animación normal terminase.
+//
+// `step` por defecto (1/20 s) es deliberadamente pequeño: varias
+// transiciones de fase dependen de que un sistema (p. ej. la apertura
+// del sobre) procese su PROPIO update() en un "fotograma" posterior al
+// que activó la transición (ver el comentario de orquestación en
+// skipIntro.js) — un `step` demasiado grande podría saltarse ese orden
+// relativo entre sistemas. `fastForward` no sabe nada de fases ni de
+// candelaFinale: quien lo usa decide cuántos segundos totales avanzar y
+// cuándo parar (ver skipIntro.js, que consulta candelaFinale.getPhase()
+// entre tandas).
+// -----------------------------------------------------------------------
+export function fastForward(totalSeconds, step = 1 / 20) {
+  let remaining = Math.max(0, totalSeconds);
+  while (remaining > 0) {
+    const dt = Math.min(step, remaining);
+    updateCallbacks.forEach((callback) => callback(dt));
+    remaining -= dt;
+  }
+}
+
 function addAmbientLight() {
   const ambient = new THREE.AmbientLight(
     CONFIG.scene.ambientColor,

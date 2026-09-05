@@ -14,6 +14,8 @@ import { createHelloKittyInspection } from "./helloKittyInspection.js";
 import { createCandelaFinale } from "./candelaFinale.js";
 import { createLetterPageControls } from "./letterPageControls.js";
 import { createLetterWriteControls } from "./letterWriteControls.js";
+import { hasVisitedBefore, markVisited, skipToLetterReady, isNarrativeSuppressed } from "./skipIntro.js";
+import { recordVisit } from "./visits.js";
 
 // -----------------------------------------------------------------------
 // ORDEN DE ARRANQUE: la intro se crea y se muestra de inmediato (es
@@ -30,7 +32,7 @@ import { createLetterWriteControls } from "./letterWriteControls.js";
 // del botón "cargar escena", el último elemento en aparecer — ver
 // intro.js), no un tiempo inventado en el código.
 // -----------------------------------------------------------------------
-const intro = createIntro();
+const intro = createIntro({ showSkip: hasVisitedBefore() });
 
 // Se expone de inmediato para poder inspeccionar/forzar la intro desde
 // la consola sin esperar a que arranque la escena; se completa con el
@@ -38,6 +40,14 @@ const intro = createIntro();
 window.candela = { intro };
 
 intro.onStart(() => {
+  // La visita se marca AQUÍ (no al cargar el HTML): es el momento real
+  // en que la persona entra a la experiencia. Ver src/skipIntro.js
+  // (localStorage, para saber si mostrar "SALTAR ANIMACIÓN" la próxima
+  // vez) y src/visits.js (registro en Supabase vía /api/visit). Ambas
+  // llamadas son baratas/no bloqueantes y no afectan al resto del flujo.
+  markVisited();
+  recordVisit();
+
   // La música arranca aquí a propósito: `onStart()` (intro.js) se
   // dispara de forma SÍNCRONA desde el propio listener de click del
   // botón "Cargar escena" (handleClick), así que llamar a music.play()
@@ -52,6 +62,22 @@ intro.onStart(() => {
   // autoplay bloqueado. Ver src/sfx.js.
   sfx.prepare();
 
+  intro.fadeOutAndDestroy();
+});
+
+// "SALTAR ANIMACIÓN" (solo existe el botón, y por tanto este evento,
+// cuando skipIntro.hasVisitedBefore() era true al crear la intro — ver
+// arriba). Mismo arranque de música/sfx/fade que "CARGAR ESCENA" (este
+// click es igualmente un gesto de usuario real): la diferencia de
+// verdad — saltar la secuencia larga — se conecta más abajo, dentro de
+// startScene(), en cuanto existen flame/candleSequence/flameWords/
+// candelaFinale (ver el segundo intro.onSkip() al final de esta
+// función).
+intro.onSkip(() => {
+  markVisited();
+  recordVisit();
+  music.play();
+  sfx.prepare();
   intro.fadeOutAndDestroy();
 });
 
@@ -234,7 +260,12 @@ function startScene() {
   });
 
   // Cada frase de la secuencia vive en content.js, nunca hardcodeada aquí.
+  // (isNarrativeSuppressed() solo es true mientras skipToLetterReady()
+  // está encadenando notifyIgnited()/notifyExtinguished() de golpe — ver
+  // src/skipIntro.js; en el flujo normal permanece siempre false y este
+  // listener se comporta exactamente igual que antes.)
   candleSequence.on("narrative", ({ key }) => {
+    if (isNarrativeSuppressed()) return;
     const line = CONTENT.candleSequence?.[key];
     if (line) showNarrativeLine(line);
   });
@@ -292,6 +323,24 @@ function startScene() {
     // encenderse la vela.
     sfx.stopCatSounds();
     candleSequence.notifyExtinguished();
+  });
+
+  // -----------------------------------------------------------------------
+  // "SALTAR ANIMACIÓN" — conexión real (ver src/skipIntro.js).
+  // Se registra aquí, al final de startScene(), y no junto al primer
+  // intro.onSkip() de arriba, porque necesita referencias reales a
+  // flame/candleSequence/flameWords/candelaFinale, que solo existen a
+  // partir de este punto. intro.js ya garantiza que este callback no
+  // puede dispararse antes de que la escena esté realmente lista: el
+  // botón "SALTAR ANIMACIÓN" permanece deshabilitado hasta
+  // intro.setReady(true), exactamente igual que "CARGAR ESCENA" (ver
+  // maybeMarkSceneReady() más arriba). skipToLetterReady() no reimplementa
+  // nada de la secuencia: reutiliza estas mismas funciones reales y las
+  // avanza con fastForward() (ver scene.js) hasta que candelaFinale llega
+  // solo a "done".
+  // -----------------------------------------------------------------------
+  intro.onSkip(() => {
+    skipToLetterReady({ flame, candleSequence, flameWords, candelaFinale });
   });
 
   // Completamos window.candela (ver arriba) con todo lo que solo existe
