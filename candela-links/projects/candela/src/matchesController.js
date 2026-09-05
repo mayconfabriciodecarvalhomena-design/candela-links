@@ -31,6 +31,17 @@ export function createMatchesController(scene, camera, renderer, matchVisual, op
   const matches = createMatches(options.mechanics);
   const interactionCfg = CONFIG.matches.interaction;
 
+  // ---- Guard: cerillas bloqueadas mientras la vela está encendida ----
+  // "Encendida" la decide por completo quien crea este controller (ver
+  // main.js: options.isCandleLit combina flame.isLit() y
+  // flame.getLightProgress(), ambas ya públicas en flame.js) — este
+  // archivo no conoce flame.js ni ningún detalle de esa definición, solo
+  // recibe la función tal cual, igual que ya hacía con
+  // `options.mechanics`, para no crear un acoplamiento nuevo ni un
+  // segundo estado paralelo. Si no se pasa (otros usos futuros del
+  // controller), nunca bloquea — comportamiento idéntico al de antes.
+  const isCandleLit = typeof options.isCandleLit === "function" ? options.isCandleLit : () => false;
+
   const readyListeners = new Set();
   function emitReadyToLightCandle(payload) {
     readyListeners.forEach((cb) => cb(payload));
@@ -101,6 +112,14 @@ export function createMatchesController(scene, camera, renderer, matchVisual, op
   }
 
   function handlePointerDown(event) {
+    // Bloqueo de interacción (ver comentario de isCandleLit arriba):
+    // mientras la vela esté encendida, cualquier click sobre las
+    // cerillas se ignora por completo ANTES de cualquier otra
+    // comprobación — ni raspar una cerilla nueva ni autoencender una ya
+    // libre hacia la mecha. No toca matches.js/matchVisual.js ni ningún
+    // estado de la llama: es solo una puerta de entrada.
+    if (isCandleLit()) return;
+
     updatePointer(event);
 
     if (matches.canStrike() && isPointerOverObject(matchVisual.object)) {
@@ -119,6 +138,16 @@ export function createMatchesController(scene, camera, renderer, matchVisual, op
   }
 
   function handlePointerMove(event) {
+    // Mismo guard que handlePointerDown: con la vela encendida, ningún
+    // gesto sobre las cerillas es válido, así que el cursor tampoco debe
+    // sugerir que lo es (si no, quedaría un cursor de "click aquí" que
+    // luego no hace nada — inconsistencia de interacción, no solo
+    // estética).
+    if (isCandleLit()) {
+      domElement.style.cursor = "default";
+      return;
+    }
+
     updatePointer(event);
     const hovering =
       (matches.canStrike() && isPointerOverObject(matchVisual.object)) ||

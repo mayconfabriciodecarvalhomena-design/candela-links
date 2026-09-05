@@ -189,7 +189,23 @@ function startScene() {
   // interacción real (click para raspar y encender, arrastre para
   // acercarla a la vela). No llama a `flame.ignite()` en ningún sitio:
   // solo expone `onReadyToLightCandle` para cuando exista esa fase.
-  const matchesController = createMatchesController(scene, camera, renderer, matchVisual);
+  const matchesController = createMatchesController(scene, camera, renderer, matchVisual, {
+    // Fuente de verdad para "la vela está encendida" — ambas piezas ya
+    // públicas en flame.js, sin ningún estado nuevo:
+    //   - flame.isLit(): estado lógico al instante. Cubre tanto el
+    //     encendido por cerilla como el de skipIntro.js durante "SALTAR
+    //     ANIMACIÓN" (llama a flame.ignite() directamente) — este
+    //     archivo no necesita saber nada de ese camino.
+    //   - flame.getLightProgress() > 0: mantiene el bloqueo mientras la
+    //     llama todavía se esté apagando visualmente después de
+    //     extinguish() (isLit ya es false en ese instante, pero la
+    //     llama sigue encendida a ojos del usuario unos instantes más
+    //     — ver flame.js, mismo umbral 0.001 que usa internamente para
+    //     decidir su propia visibilidad). Así el bloqueo cubre "todo el
+    //     periodo en que la vela se considera encendida, incluyendo la
+    //     animación de apagado", sin inventar un segundo temporizador.
+    isCandleLit: () => flame.isLit() || flame.getLightProgress() > 0.001,
+  });
 
   // Etiqueta "Chloe" al pasar el cursor sobre el gato: sistema aparte,
   // con su propio raycaster y su propio listener de puntero (no toca
