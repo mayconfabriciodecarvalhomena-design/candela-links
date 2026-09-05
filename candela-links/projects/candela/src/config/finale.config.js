@@ -430,8 +430,17 @@ export const FINALE_CONFIG = {
     // aparte. La carta es una única hoja completa (nunca mitades) — ver
     // letterMesh.js. Escalado durante la animación es del `group` (ver
     // `emerge.finalScale`), nunca un cambio de esta geometría base.
-    width: 0.205,
-    height: 0.29,
+    // ITERACIÓN — HOJAS MÁS GRANDES (ver encargo: "quiero más
+    // superficie disponible para escribir, no solo reducir la fuente").
+    // ×1.25 en ambas dimensiones (25%), MISMA proporción width/height
+    // que antes (0.205/0.29 = 0.25625/0.3625 ≈ 0.707) — la composición
+    // y el resto de la escena (cámara, sobre, vela) no cambian, solo
+    // crece la hoja. `text.font.canvasHeightPx` (ver más abajo) se
+    // escala por el MISMO factor exacto — es lo que permite que haya
+    // más superficie de escritura real SIN que la tipografía cambie de
+    // tamaño aparente (ver esa constante para la explicación completa).
+    width: 0.25625,
+    height: 0.3625,
 
     // Apariencia física (mismo criterio que envelope: color papel
     // cálido, mate, sin textura externa; MeshStandardMaterial
@@ -877,7 +886,19 @@ export const FINALE_CONFIG = {
         // (alto en píxeles; el ancho se calcula a partir de esto y de
         // letter.width/letter.height para que el texto nunca salga
         // deformado, sea cual sea el tamaño real de la carta).
-        canvasHeightPx: 640,
+        //
+        // ITERACIÓN — HOJAS MÁS GRANDES (ver `letter.width`/`height`
+        // arriba): sube de 640 a 800, EXACTAMENTE el mismo factor ×1.25
+        // que `letter.width`/`letter.height`. "Píxeles de canvas por
+        // unidad de mundo" = canvasHeightPx / letter.height: al escalar
+        // AMBOS por ×1.25 la densidad no cambia — un carácter de
+        // `sizePx` concreto ocupa el mismo tamaño físico (y por tanto
+        // el mismo tamaño aparente en pantalla) que antes, mientras la
+        // superficie total de escritura crece. Si solo creciese `letter`
+        // y no esto, los caracteres se verían un 25% más grandes. Los
+        // márgenes/proporciones del texto son fracciones del canvas, se
+        // adaptan a la nueva resolución solos.
+        canvasHeightPx: 800,
         // Fracción del ancho del canvas disponible para el ajuste de
         // línea automático (word-wrap) antes de saltar de línea —
         // también actúa como margen lateral visual (a menor fracción,

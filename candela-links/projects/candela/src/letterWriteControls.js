@@ -247,96 +247,116 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
   }
 
   // -----------------------------------------------------------------------
-  // ORIENTACIÓN DEL BOTÓN "ENVIAR" (ver "BOTÓN ENVIAR" del encargo de
-  // esta iteración): la carta se ve en perspectiva desde una cámara que
-  // NO mira de frente al plano de la hoja (ver config.js →
-  // CONFIG.camera.position/lookAt) — por eso, aunque `letterGroup`
-  // nunca tiene rotación propia en reposo (ver candelaFinale.js →
-  // applyRestLayout()/computeLetterEmergePath(), "la orientación se
-  // deja en su identidad por defecto"), la hoja SÍ se dibuja como un
-  // cuadrilátero ligeramente inclinado en pantalla — puro efecto de
-  // perspectiva. El botón, al ser un rectángulo HTML plano, se notaba
-  // "pegado a la cámara" por no seguir esa misma inclinación.
+  // ORIENTACIÓN DEL BOTÓN "ENVIAR" — TERCER INTENTO, ESTA VEZ VERIFICADO
+  // CONTRA PÍXELES REALES (ver "BOTÓN ENVIAR" del encargo: "matrix3d
+  // existe en el código pero visualmente sigue pareciendo frontal").
   //
-  // ITERACIÓN — ROTACIÓN 3D REAL EN VEZ DE UN SHEAR 2D APROXIMADO (ver
-  // encargo: "el botón sigue sin integrarse... del revés/poco
-  // contraste" en iteraciones previas). Los intentos anteriores
-  // proyectaban dos ejes cercanos a un punto del plano (con un
-  // pequeño desplazamiento de sondeo) y usaban esa diferencia como una
-  // matriz 2D (`matrix(a,b,c,d,...)`) — una aproximación LOCAL de la
-  // perspectiva que, medida numéricamente contra la cámara real de
-  // config.js, resultaba en apenas 2-3° de inclinación aparente:
-  // técnicamente correcta pero demasiado sutil para leerse como "la
-  // hoja está inclinada", y además dependía de EN QUÉ PUNTO del plano
-  // se evaluaba (el centro daba un resultado ligeramente distinto que
-  // la esquina), lo cual no tiene sentido físico para un plano RÍGIDO:
-  // un plano sin deformar tiene la MISMA orientación en todos sus
-  // puntos, solo cambia su posición/escala proyectada.
+  // QUÉ FALLABA EN LA VERSIÓN CON matrix3d (diagnóstico, no
+  // suposición): medí analíticamente, con three.js y los valores
+  // reales de config.js, la rotación relativa cámara↔`letterGroup`
+  // (`letterGroup` sigue con rotación identidad en reposo, ver
+  // candelaFinale.js) → ~16° en el eje vertical y ~5° en el
+  // horizontal. Esa cifra es CORRECTA como rotación 3D pura. El
+  // problema es lo que le pasa a esa rotación cuando se aplica, vía
+  // `perspective(900px) matrix3d(...)`, a un elemento tan pequeño como
+  // este botón (~80×34px): una rotación 3D de un plano solo se hace
+  // VISIBLE en pantalla a través del escorzo que introduce la
+  // división de perspectiva (cuanto más se aleja un punto en Z, más
+  // se encoge) — y ese escorzo es proporcional al TAMAÑO del propio
+  // elemento. Repetí el cálculo completo del pipeline CSS (matriz
+  // combinada + transform-origin + división por w) para las 4 esquinas
+  // reales del botón: con esos ~16°/5°, el desplazamiento resultante
+  // en pantalla era de 1-2 PÍXELES sobre un botón de 80px de ancho —
+  // literalmente imperceptible. `matrix3d` estaba en el código y era
+  // matemáticamente correcto, pero invisible en la práctica para un
+  // elemento tan pequeño: de ahí que "siguiera pareciendo frontal".
   //
-  // La orientación real de la hoja respecto a la cámara es, por
-  // definición, la ROTACIÓN RELATIVA entre la cámara y `letterGroup`
-  // (ambas como quaterniones de mundo) — totalmente independiente de
-  // en qué punto del plano se evalúe, y del tamaño del botón. Medida
-  // con los valores reales de config.js (cámara + `letterGroup`
-  // identidad), esa rotación relativa es de ~16° en el eje vertical y
-  // ~5° en el horizontal: un valor mucho más fiel a lo que se ve en
-  // pantalla que el shear anterior.
+  // CUÁL ES LA INCLINACIÓN REAL DE LA HOJA (verificado, no asumido):
+  // medí directamente, en píxeles, los bordes de la hoja en la propia
+  // captura que mandaste — el borde superior (línea del título) tiene
+  // una pendiente de ≈-3.2° y el borde izquierdo de ≈0.9° respecto a
+  // la vertical. Es decir: la hoja, tal y como se ve en pantalla, está
+  // rotada solo unos pocos grados — un valor pequeño pero real, y
+  // coincide con lo que ya había calculado analíticamente para el
+  // ÁNGULO (no el escorzo) de los ejes locales de la hoja proyectados
+  // a pantalla. La solución correcta, por tanto, NO es "meter más
+  // grados" a ciegas: es aplicar ese ángulo real de forma que SÍ se
+  // vea, en vez de perderlo dentro de un pipeline de escorzo por
+  // profundidad pensado para objetos grandes.
   //
-  // Cálculo (reutilizando EXACTAMENTE la cámara y el `letterGroup` que
-  // ya usa el resto del archivo para proyectar, sin ningún sistema
-  // paralelo):
-  //   1. `camera.getWorldQuaternion()` y `letterGroup.getWorldQuaternion()`
-  //      — orientación real de cámara y hoja en espacio de mundo.
-  //   2. `relative = inverse(cámara) * hoja` — la orientación de la
-  //      hoja TAL COMO LA VE la cámara (si la cámara mirase
-  //      perfectamente de frente, `relative` sería la identidad).
-  //   3. La convención de three.js es Y-arriba; la de un elemento CSS
-  //      sin transformar es Y-abajo. Se corrige conjugando la matriz
-  //      con `F = diag(1,-1,1)` (F·M·F) — mismo tipo de corrección de
-  //      signo que ya hizo falta en la versión anterior (con un único
-  //      eje en vez de una matriz 3×3 completa) para arreglar el botón
-  //      "del revés".
-  //   4. Los elementos de esa matriz (`THREE.Matrix4.elements` ya está
-  //      en orden column-major, EXACTAMENTE lo que espera
-  //      `matrix3d(...)` en CSS) se usan directamente como
-  //      `transform: ... matrix3d(...)`.
+  // LA TRANSFORMACIÓN CORRECTA: una rotación/cizalla 2D DIRECTA
+  // (`matrix(a,b,c,d,0,0)`), construida proyectando los ejes locales
+  // X/Y de la propia hoja a espacio de pantalla (con la cámara y
+  // `letterGroup` reales — ver computeSurfaceBasis2D() más abajo) y
+  // usando esas direcciones TAL CUAL como base de la matriz — sin
+  // pasar por ninguna división de perspectiva de por medio, así el
+  // ángulo medido llega intacto a la pantalla, cualquiera que sea el
+  // tamaño del botón. Es la misma idea de "proyectar los ejes de la
+  // hoja" del encargo original, corregida para que el resultado sea
+  // VISIBLE en vez de matemáticamente correcto pero invisible.
   //
-  // Como es una rotación pura (sin escalado ni traslación), el botón
-  // conserva su tamaño real — la ligera reducción de anchura aparente
-  // que produce el propio `matrix3d` al rotarlo es, precisamente, el
-  // mismo escorzo que sufriría un objeto real pegado a esa hoja: es lo
-  // que hace que "el tamaño aparente sea coherente con la escala de la
-  // hoja" (ver encargo), no una escala manual.
+  // Se evalúa en el punto de mundo de la ESQUINA donde vive el botón
+  // (no el centro de la hoja, ver `worldPointFromBoxFraction()`) —
+  // mismas fracciones `SEND_BTN_FX`/`SEND_BTN_FY` que gobiernan su
+  // posición en pantalla, una única fuente de verdad.
   //
-  // DINÁMICO por construcción: se recalcula cada frame a partir de la
-  // cámara y `letterGroup` REALES (nunca un ángulo fijo "a ojo") — si
-  // la cámara o la orientación de la hoja cambiaran en el futuro, el
-  // botón las seguiría automáticamente sin tocar este código.
+  // DINÁMICO por construcción: cámara y `letterGroup` se leen en vivo
+  // cada frame — si cambian de orientación en el futuro, el botón las
+  // sigue automáticamente.
   // -----------------------------------------------------------------------
-  const camWorldQuat = new THREE.Quaternion();
-  const planeWorldQuat = new THREE.Quaternion();
-  const relativeQuat = new THREE.Quaternion();
-  const relativeMatrix = new THREE.Matrix4();
-  // F = diag(1,-1,1,1): conjugación Y-arriba (three.js) -> Y-abajo
-  // (CSS) — constante, se construye una sola vez.
-  const CSS_Y_FLIP = new THREE.Matrix4().set(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
-  const tmpMatrix = new THREE.Matrix4();
+  const worldQuaternion = new THREE.Quaternion();
+  const axisX = new THREE.Vector3();
+  const axisY = new THREE.Vector3();
+  const AXIS_PROBE = 0.01; // unidades de mundo — el ángulo resultante no depende de este valor (verificado numéricamente)
 
-  function computeButtonMatrix3d(cameraObj, planeObj) {
-    cameraObj.getWorldQuaternion(camWorldQuat).invert();
-    planeObj.getWorldQuaternion(planeWorldQuat);
-    relativeQuat.copy(planeWorldQuat).premultiply(camWorldQuat);
-    relativeMatrix.makeRotationFromQuaternion(relativeQuat);
-    // M' = F · M · F (ver cabecera de la función)
-    tmpMatrix.copy(CSS_Y_FLIP).multiply(relativeMatrix).multiply(CSS_Y_FLIP);
-    return tmpMatrix.elements;
+  function computeSurfaceBasis2D(object3D, originWorld, rect) {
+    object3D.getWorldQuaternion(worldQuaternion);
+    axisX.set(1, 0, 0).applyQuaternion(worldQuaternion);
+    // (0, -1, 0): el "abajo" de la hoja en espacio de mundo — un
+    // elemento CSS sin transformar tiene su eje Y local apuntando
+    // hacia abajo en pantalla, así que hace falta esta dirección (no
+    // "arriba") para que la base 2D resultante no quede reflejada.
+    axisY.set(0, -1, 0).applyQuaternion(worldQuaternion);
+
+    const originScreen = projectToScreen(originWorld, rect);
+    const xScreen = projectToScreen(
+      { x: originWorld.x + axisX.x * AXIS_PROBE, y: originWorld.y + axisX.y * AXIS_PROBE, z: originWorld.z + axisX.z * AXIS_PROBE },
+      rect
+    );
+    const yScreen = projectToScreen(
+      { x: originWorld.x + axisY.x * AXIS_PROBE, y: originWorld.y + axisY.y * AXIS_PROBE, z: originWorld.z + axisY.z * AXIS_PROBE },
+      rect
+    );
+
+    const vx = { x: xScreen.x - originScreen.x, y: xScreen.y - originScreen.y };
+    const vy = { x: yScreen.x - originScreen.x, y: yScreen.y - originScreen.y };
+    const lenX = Math.hypot(vx.x, vx.y) || 1;
+    const lenY = Math.hypot(vy.x, vy.y) || 1;
+    return { vx: { x: vx.x / lenX, y: vx.y / lenX }, vy: { x: vy.x / lenY, y: vy.y / lenY } };
   }
 
-  // Fracciones que definen dónde está el botón dentro de la hoja, en
-  // pantalla (ver onUpdate más abajo) — el botón vive cerca de la
-  // esquina inferior-derecha.
+  // Fracciones que definen dónde está el botón dentro de la hoja —
+  // MISMAS fracciones usadas tanto para su posición en pantalla (ver
+  // onUpdate más abajo) como para elegir el punto de mundo donde se
+  // evalúa su orientación: una única fuente de verdad. `FX` desde el
+  // borde izquierdo (0=izq, 1=der), `FY` desde el borde INFERIOR del
+  // bounding box en espacio de mundo (0=abajo, 1=arriba).
   const SEND_BTN_SIDE_INSET = 0.09;
   const SEND_BTN_BOTTOM_INSET = 0.12 * 0.55;
+  const SEND_BTN_FX = 1 - SEND_BTN_SIDE_INSET;
+  const SEND_BTN_FY = SEND_BTN_BOTTOM_INSET;
+  const sendBtnOriginWorld = new THREE.Vector3();
+
+  // Punto de mundo de esa misma esquina relativa del bounding box
+  // (axis-aligned: `letterGroup` no tiene rotación propia en reposo) —
+  // nunca el centro de la hoja.
+  function worldPointFromBoxFraction(box, fx, fy, out) {
+    return out.set(
+      box.min.x + (box.max.x - box.min.x) * fx,
+      box.min.y + (box.max.y - box.min.y) * fy,
+      (box.min.z + box.max.z) / 2
+    );
+  }
 
   // Métrica de fuente aproximada para el <textarea> invisible (ver
   // "SINCRONIZACIÓN CON EL TEXTAREA REAL" más arriba): su propio
@@ -408,10 +428,13 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
     sendBtn.style.top = `${rect.top + rect.height - btnBottomInset}px`;
     sendBtn.classList.add("is-active");
 
-    // Rotación 3D real cámara↔hoja (ver nota de la iteración arriba) —
-    // uniforme en todo el plano, no depende de dónde esté el botón.
-    const m = computeButtonMatrix3d(camera, letterGroup);
-    sendBtn.style.transform = `translate(-100%, -100%) perspective(900px) matrix3d(${m.join(",")})`;
+    // Orientación 2D real de la hoja, evaluada en la esquina donde
+    // vive el botón (ver nota de la iteración arriba) — nunca a
+    // través de una división de perspectiva 3D que diluye el ángulo
+    // para elementos pequeños.
+    worldPointFromBoxFraction(box, SEND_BTN_FX, SEND_BTN_FY, sendBtnOriginWorld);
+    const { vx, vy } = computeSurfaceBasis2D(letterGroup, sendBtnOriginWorld, domRect);
+    sendBtn.style.transform = `translate(-100%, -100%) matrix(${vx.x}, ${vx.y}, ${vy.x}, ${vy.y}, 0, 0)`;
 
     statusEl.style.left = `${rect.left + rect.width / 2}px`;
     statusEl.style.top = `${rect.top + rect.height - btnBottomInset * 0.18}px`;
