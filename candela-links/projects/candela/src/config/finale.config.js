@@ -705,7 +705,18 @@ export const FINALE_CONFIG = {
         // `text.font.canvasHeightPx` más abajo, así el margen se
         // mantiene proporcional sea cual sea el tamaño real de la
         // carta).
-        marginTopFraction: 0.09,
+        //
+        // ITERACIÓN — SUBIR EL TÍTULO (ver encargo: "demasiado espacio
+        // vertical entre el título y el borde superior... subir
+        // ligeramente, sin pegarlo al borde"). `marginTopFraction`
+        // baja de 0.09 a 0.045 — reduce el hueco por encima del
+        // título, dejando un margen visual razonable (no cero).
+        // `gapFraction` (separación título→cuerpo) se deja intacta;
+        // esto no toca la composición por debajo del título. Es la
+        // ÚNICA configuración de título de TODA la carta (ver nota de
+        // arriba: la usan las hojas 1-4 y la última hoja por igual),
+        // así que el ajuste se aplica a todas a la vez.
+        marginTopFraction: 0.045,
         gapFraction: 0.05,
         // Fracción del ancho del canvas disponible para el ajuste de
         // línea del título (mismo criterio que `text.font.
