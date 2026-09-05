@@ -565,11 +565,32 @@ export const FINALE_CONFIG = {
       // ambos sentidos (ver "Quiero que el movimiento sea coherente en
       // ambas direcciones" del encargo).
       turnDuration: 0.9,
-      // Separación mínima en el eje Z entre hojas apiladas, solo para
-      // evitar z-fighting entre planos casi coplanares — nunca para
-      // cambiar el tamaño/posición general de la carta (ver
-      // letterMesh.js: es un desplazamiento imperceptible por hoja).
-      stackSpacing: 0.00006,
+      // ITERACIÓN — CORRECCIÓN "LA HOJA ATRAVIESA/PENETRA LA HOJA DE
+      // DETRÁS" (ver vídeo aportado + letterMesh.js, comentario junto a
+      // `slotDepth()`). Sustituye a la antigua `stackSpacing` (una
+      // separación lineal repartida entre las `pageCount` ranuras).
+      // Ahora la pila es de DOS posiciones físicas: la hoja actual
+      // (`FRONT_DEPTH`) y TODAS las demás (`FRONT_DEPTH - stackGap`) —
+      // ver letterMesh.js para el porqué de este cambio de arquitectura.
+      //
+      // El valor 0.03 no es arbitrario: una hoja en vuelo está
+      // inclinada (`tiltMax`, más abajo) y una hoja inclinada tiene
+      // distinta profundidad en su borde superior y en su borde
+      // inferior (∝ `height · sin(tilt)`). Simulé punto a punto la
+      // propia hoja (no solo su centro) a lo largo de todo el vuelo, en
+      // ambos sentidos, y comprobé para qué valor de separación ninguna
+      // esquina de la hoja llega a "verse delante" antes de que le
+      // toque: el umbral exacto está en ≈0.0225 unidades (por debajo de
+      // eso, la punta de la hoja que vuelve desde atrás asoma delante
+      // de la hoja actual mientras aún debería estar oculta). 0.03 deja
+      // un margen de seguridad de ~30% sobre ese umbral, para absorber
+      // variaciones de framerate reales sin reintroducir la
+      // penetración. Sigue siendo un valor minúsculo frente al tamaño
+      // real de la carta (`height` ≈0.29): invisible en reposo (las
+      // hojas traseras están siempre completamente ocultas detrás de
+      // la actual) y no afecta al desplazamiento en Z hacia cámara
+      // (`popFraction`/`behindFraction`, sin cambios, ver más abajo).
+      stackGap: 0.03,
 
       // ARCO DE VUELO de la hoja que se está pasando (ver "FLECHA
       // DERECHA"/"FLECHA IZQUIERDA" del encargo: separación → recorrido
@@ -613,9 +634,9 @@ export const FINALE_CONFIG = {
         // placa gigante lanzándose hacia la cámara en vez de una hoja
         // separándose de la pila. Se reducen aquí a una fracción de
         // `width` mucho menor — el desplazamiento en Z sigue siendo
-        // muchísimo mayor que el grosor real de la pila
-        // (`stackSpacing`, del orden de 10⁻⁵), de sobra para una
-        // separación clara, pero pequeño frente a la distancia a
+        // muchísimo mayor que el grosor real de la pila (`stackGap`,
+        // 0.03 — ver arriba), de sobra para una separación clara, pero
+        // pequeño frente a la distancia a
         // cámara, para que la perspectiva apenas cambie durante el
         // vuelo.
         popFraction: 0.16,

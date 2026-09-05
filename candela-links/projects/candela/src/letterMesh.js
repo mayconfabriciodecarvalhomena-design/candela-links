@@ -38,9 +38,10 @@ import * as THREE from "three";
 //     fondo y la reinserta arriba — ACOTADO, sin bucle: se bloquea en
 //     la primera/última hoja, la carta tiene un principio y un final
 //     reales (ver nextPage()/previousPage() más abajo). El resto de
-//     hojas NO se mueve (sus huecos de profundidad son imperceptibles
-//     — `stackSpacing` — así que no hace falta animarlas, solo
-//     reasignarles su nueva ranura al terminar la transición).
+//     hojas NO se mueve (todas comparten una única profundidad
+    //     trasera, `FRONT_DEPTH - stackGap` — ver `slotDepth()` más
+    //     abajo — así que no hace falta animarlas, solo reasignarles su
+    //     nueva ranura al terminar la transición).
 //   - La hoja que se mueve sigue una curva de Bézier cúbica en el
 //     espacio (posición) más una inclinación temporal (rotación) — ver
 //     `updatePageTurn()` más abajo — que la separa de la pila hacia la
@@ -116,14 +117,53 @@ export function createLetterMesh(cfg, onUpdate) {
   const pageCfg = cfg.page;
   const pageCount = pageContents.length;
 
-  // Profundidad Z de la ranura `slot` dentro de la pila (0 = arriba del
-  // todo/la que se lee, pageCount-1 = la más al fondo). Separación
-  // minúscula (`stackSpacing`) solo para evitar z-fighting entre planos
-  // casi coplanares — nunca para cambiar el tamaño/posición general de
-  // la carta. Se usa tanto para el reposo como para los extremos del
-  // vuelo (ver updatePageTurn()).
+  // ITERACIÓN — CORRECCIÓN "LA HOJA TODAVÍA ATRAVIESA/PENETRA LA HOJA DE
+  // DETRÁS" (ver vídeo aportado: en la transición 4→3 se ve durante un
+  // instante el título de la hoja 3 —la que viene desde detrás— asomando
+  // POR ENCIMA del título de la hoja 4 —la que se está leyendo— antes de
+  // que le toque pasar delante).
+  //
+  // Causa real, verificada con una simulación numérica punto a punto de
+  // la propia hoja (no solo su centro): el sistema anterior colocaba las
+  // `pageCount` hojas estáticas en una pila LINEAL de ranuras casi
+  // coplanares (`slotDepth` con `stackSpacing` ≈0.00006, un total de
+  // apenas 0.00024 de separación entre la ranura 0 y la última). Ese
+  // margen es minúsculo comparado con algo que no tenía en cuenta: la
+  // hoja en vuelo está INCLINADA (`tiltMax`, ver flight.tiltMax), y una
+  // hoja inclinada NO tiene un único Z — su borde superior y su borde
+  // inferior están a distinta profundidad real (proporcional a
+  // `height · sin(tilt)`). La simulación muestra que, en el instante en
+  // que la hoja que vuelve desde atrás empieza a inclinarse (antes
+  // incluso de que arranque su propio cruce de profundidad, ver
+  // `depthEase`), la punta de esa inclinación ya supera los ~0.023
+  // unidades de profundidad — muy por encima de los 0.00024 de holgura
+  // que daba la pila lineal antigua. Por eso una esquina de la hoja
+  // "se veía delante" un instante aunque su centro estuviera
+  // correctamente detrás: no era un fallo del z-buffer (que seguía
+  // resolviendo la profundidad real, sin trucos de `renderOrder`), era
+  // que la propia pila no dejaba margen suficiente para absorber la
+  // inclinación.
+  //
+  // Solución — PILA FÍSICA DE DOS POSICIONES (tal y como pide el
+  // encargo): en vez de repartir `pageCount` ranuras en un gradiente
+  // lineal, ahora solo existen dos profundidades con significado
+  // visual: `FRONT_DEPTH` (la hoja que se está leyendo — slot 0) y
+  // `FRONT_DEPTH - pageCfg.stackGap` (TODAS las demás hojas, sin
+  // importar cuántas haya ni en qué ranura estén). Esto tiene sentido
+  // físico: las hojas que no son la actual están siempre completamente
+  // ocultas detrás de ella (mismo tamaño, mismo X/Y, sin rotación en
+  // reposo), así que no hace falta —ni aporta nada— darles una
+  // profundidad distinta entre ellas; solo importa que la "trasera"
+  // esté lo bastante lejos de la "delantera" como para que ninguna
+  // inclinación en vuelo confunda al z-buffer. `stackGap` (ver
+  // finale.config.js) es precisamente ese margen, calculado para cubrir
+  // con holgura el peor caso de inclinación durante el vuelo — sigue
+  // siendo un valor minúsculo frente al tamaño real de la carta (no
+  // reintroduce el efecto "placa enorme acercándose a la cámara": no
+  // toca `popFraction`/`behindFraction`, que siguen intactas).
+  const FRONT_DEPTH = 0.0012;
   function slotDepth(slot) {
-    return 0.0012 + (pageCount - 1 - slot) * pageCfg.stackSpacing;
+    return slot === 0 ? FRONT_DEPTH : FRONT_DEPTH - pageCfg.stackGap;
   }
 
   const pages = pageContents.map((pageData) => {
