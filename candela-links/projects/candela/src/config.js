@@ -193,7 +193,9 @@ export const CONFIG = {
   // -----------------------------------------------------------------------
   // HELLO KITTY INSPECTION: interacción de click/tap sobre la Hello
   // Kitty para acercar la cámara y observarla de cerca
-  // (src/helloKittyInspection.js). Fuente de verdad real:
+  // (src/objectInspection.js — antes helloKittyInspection.js, ahora
+  // generalizado; también lo usa el cuadro de la pared con esta misma
+  // configuración). Fuente de verdad real:
   // src/config/helloKittyInspection.config.js. Aquí solo se importa y
   // se expone, mismo criterio que el resto de sistemas.
   // -----------------------------------------------------------------------

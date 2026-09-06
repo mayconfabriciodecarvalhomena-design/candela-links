@@ -26,9 +26,9 @@ export function createRoom(scene) {
   addWalls(group, cfg.wall);
   const table = addTable(group, cfg.table);
   addMirror(group, cfg.mirror);
-  addDoor(group, cfg.door);
+  const door = addDoor(group, cfg.door);
 
-  return { group, tableTopY: TABLE_TOP_Y, table };
+  return { group, tableTopY: TABLE_TOP_Y, table, door };
 }
 
 // ---- SUELO ----
@@ -255,6 +255,17 @@ function addMirror(group, cfg) {
 
 // ---- PUERTA ----
 function addDoor(group, cfg) {
+  // Agrupa hoja+marco+pomo bajo un único THREE.Group (sin ninguna
+  // posición/rotación propia: transform identidad, así que ningún hijo
+  // cambia de posición/tamaño/orientación mundial respecto a antes —
+  // solo agrupa para que src/doorInteraction.js pueda hacer raycasting
+  // contra "la puerta" como un único objeto, en vez de solo contra la
+  // hoja). No añade ninguna animación ni estado: la puerta sigue
+  // completamente estática, exactamente igual que el resto de la
+  // habitación.
+  const doorGroup = new THREE.Group();
+  group.add(doorGroup);
+
   // La puerta vive en la pared del FONDO (misma pared que la mesa): su
   // cara visible mira hacia +Z, así que es una caja fina en Z, ancha en
   // X (antes era al revés, pensada para la pared lateral — ver nota
@@ -267,7 +278,7 @@ function addDoor(group, cfg) {
   door.position.set(cfg.position[0], cfg.height / 2, cfg.position[1]);
   door.castShadow = true;
   door.receiveShadow = true;
-  group.add(door);
+  doorGroup.add(door);
 
   // Marco: un segundo bloque blanco, más ancho que la hoja (cfg.frame.
   // margin por lado) y recedido hacia la pared respecto a su cara
@@ -297,7 +308,7 @@ function addDoor(group, cfg) {
   frame.position.set(cfg.position[0], frameHeight / 2, frameCenterZ);
   frame.castShadow = true;
   frame.receiveShadow = true;
-  group.add(frame);
+  doorGroup.add(frame);
 
   const knob = new THREE.Mesh(
     new THREE.SphereGeometry(cfg.knob.radius, 12, 10),
@@ -321,5 +332,7 @@ function addDoor(group, cfg) {
     cfg.knob.height,
     cfg.position[1] + thickness / 2 + cfg.knob.radius * 0.6
   );
-  group.add(knob);
+  doorGroup.add(knob);
+
+  return doorGroup;
 }

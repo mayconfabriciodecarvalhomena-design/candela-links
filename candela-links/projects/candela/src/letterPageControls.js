@@ -15,7 +15,7 @@ import { onUpdate } from "./scene.js";
 // su bounding box actual, igual que catHover.js hace con `cat.model`),
 // y con pointer-events:none salvo cuando están visibles — así nunca
 // pueden interferir con la cerilla (matchesController.js), el gato
-// (catHover.js) o la Hello Kitty (helloKittyInspection.js): esos
+// (catHover.js) o la Hello Kitty/el cuadro (objectInspection.js): esos
 // sistemas escuchan eventos sobre el <canvas>; estas flechas son
 // elementos DOM aparte, por encima en el z-index, que solo capturan el
 // click cuando el propio navegador determina que el puntero está sobre

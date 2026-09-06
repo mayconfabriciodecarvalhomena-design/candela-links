@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { CONFIG } from "./config.js";
 import { initScene, onUpdate } from "./scene.js";
 import { createMatchesController } from "./matchesController.js";
 import { onFlameExtinguished } from "./flame.js";
@@ -10,7 +11,8 @@ import { CONTENT } from "../content.js";
 import { music } from "./music.js";
 import { sfx } from "./sfx.js";
 import { createCatHoverLabel } from "./catHover.js";
-import { createHelloKittyInspection } from "./helloKittyInspection.js";
+import { createObjectInspection } from "./objectInspection.js";
+import { createDoorInteraction } from "./doorInteraction.js";
 import { createCandelaFinale } from "./candelaFinale.js";
 import { createLetterPageControls } from "./letterPageControls.js";
 import { createLetterWriteControls } from "./letterWriteControls.js";
@@ -112,6 +114,7 @@ function startScene() {
     camera,
     renderer,
     room,
+    pictureFrame,
     flame,
     smoke,
     backgroundParticles,
@@ -213,12 +216,45 @@ function startScene() {
   // src/catHover.js).
   const catHoverLabel = createCatHoverLabel(camera, renderer, cat);
 
-  // Click/tap sobre la Hello Kitty de la mesa: acerca la cámara con una
-  // transición suave para inspeccionarla de cerca; click/tap fuera
-  // vuelve a la vista anterior. Sistema aparte, con su propio
-  // raycaster y su propio listener de puntero (mismo criterio que
-  // catHoverLabel/matchesController — ver src/helloKittyInspection.js).
-  const helloKittyInspection = createHelloKittyInspection(scene, camera, renderer, helloKitty);
+  // Click/tap sobre la Hello Kitty de la mesa O sobre el cuadro de la
+  // pared: acerca la cámara con una transición suave para verlos de
+  // cerca; click/tap fuera vuelve a la vista anterior. Mismo sistema
+  // para los dos (no hay dos animaciones de cámara distintas — ver la
+  // nota completa en src/objectInspection.js, antes específico de la
+  // Kitty y ahora generalizado a una lista de objetivos). El cuadro se
+  // registra con la MISMA configuración que la Kitty
+  // (CONFIG.helloKittyInspection): mismo estilo/duración/suavidad, tal
+  // como se pidió — solo cambia su geometría real (pictureFrame.group)
+  // y su propia normal de cara (misma fórmula que ya usa
+  // pictureFrame.js para "hacia dónde mira la pared").
+  const objectInspectionYAxis = new THREE.Vector3(0, 1, 0);
+  const objectInspection = createObjectInspection(scene, camera, renderer, [
+    {
+      key: "kitty",
+      getObject3D: () => helloKitty.model,
+      computeFaceDirection: (out) =>
+        out.set(-1, 0, 0).applyAxisAngle(objectInspectionYAxis, helloKitty.group.rotation.y),
+      cfg: CONFIG.helloKittyInspection,
+    },
+    {
+      key: "pictureFrame",
+      getObject3D: () => pictureFrame.group,
+      computeFaceDirection: (out) => {
+        const rotationY = CONFIG.pictureFrame.rotationY ?? 0;
+        out.set(Math.sin(rotationY), 0, Math.cos(rotationY));
+      },
+      cfg: CONFIG.helloKittyInspection,
+    },
+  ]);
+
+  // Click sobre la puerta de la habitación: no se abre (no tiene, ni va
+  // a tener, ninguna animación de apertura) — solo muestra un aviso
+  // reutilizando el mismo sistema de texto narrativo que ya usa el
+  // resto de la experiencia (showNarrativeLine, ver src/narrative.js).
+  // Sistema aparte, con su propio listener de puntero (mismo criterio
+  // que catHoverLabel/objectInspection/matchesController) — ver la nota
+  // completa en src/doorInteraction.js.
+  const doorInteraction = createDoorInteraction(camera, renderer, room.door);
 
   // -----------------------------------------------------------------------
   // FINAL DE CANDELA (primera parte): transición desde la última frase
@@ -239,7 +275,7 @@ function startScene() {
   // overlay HTML aparte, con su propio listener de click sobre sus
   // propios elementos — nunca toca renderer.domElement ni ningún
   // raycaster existente (mismo criterio de aislamiento que
-  // catHoverLabel/helloKittyInspection/matchesController, cada uno con
+  // catHoverLabel/objectInspection/matchesController, cada uno con
   // su propia interacción independiente sobre la misma escena). Se
   // conecta directamente a candelaFinale.nextPage()/previousPage()/
   // isTurning()/getCurrentPage()/getPageCount() — no crea ningún
@@ -373,12 +409,18 @@ function startScene() {
   //   candela.helloKitty.model / candela.helloKitty.group
   //     (inspeccionar el modelo/posición cargados; no tiene reveal/hide,
   //     es un objeto decorativo estático iluminado por la vela)
-  //   candela.helloKittyInspection.state — estado actual de la
-  //     interacción de inspección ("IDLE" / "TRANSITION_IN" /
-  //     "KITTY_INSPECTION" / "TRANSITION_OUT")
-  //   candela.helloKittyInspection.enter() / .exit() — forzar la
-  //     entrada/salida de la inspección sin necesidad de hacer click
-  //     sobre la Kitty (útil para probar la transición desde consola)
+  //   candela.objectInspection.state — estado actual de la interacción
+  //     de inspección ("IDLE" / "TRANSITION_IN" / "INSPECTING" /
+  //     "TRANSITION_OUT"), compartido por la Kitty y el cuadro (una
+  //     sola cámara, una sola inspección posible a la vez — ver
+  //     src/objectInspection.js, generalización de lo que antes era
+  //     helloKittyInspection.js).
+  //   candela.objectInspection.activeTargetKey — "kitty" / "pictureFrame"
+  //     / null: cuál de los dos se está inspeccionando ahora mismo.
+  //   candela.objectInspection.enter("kitty") / .enter("pictureFrame")
+  //     / .exit() — forzar la entrada/salida de la inspección sin
+  //     necesidad de hacer click (útil para probar la transición desde
+  //     consola).
   //   candela.candleSequence.getState() / candela.candleSequence.reset()
   //     (inspeccionar o reiniciar la secuencia de encendido de la vela)
   //   candela.intro.setReady(true) — forzar el botón "cargar escena" a
@@ -433,6 +475,7 @@ function startScene() {
   // scene.js; aquí solo se exponen para inspección manual.
   Object.assign(window.candela, {
     room,
+    pictureFrame,
     flame,
     smoke,
     backgroundParticles,
@@ -441,7 +484,8 @@ function startScene() {
     cat,
     catHoverLabel,
     helloKitty,
-    helloKittyInspection,
+    objectInspection,
+    doorInteraction,
     candleSequence,
     music,
     sfx,

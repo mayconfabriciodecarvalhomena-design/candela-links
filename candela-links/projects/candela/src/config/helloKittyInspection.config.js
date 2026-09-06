@@ -1,15 +1,19 @@
 // -----------------------------------------------------------------------
 // HELLO_KITTY_INSPECTION_CONFIG: fuente de verdad de la configuración de
-// la interacción "coger e inspeccionar" la Hello Kitty de la mesa (ver
-// src/helloKittyInspection.js). Mismo patrón que el resto de sistemas:
-// este archivo es responsabilidad exclusiva de esta interacción, y
-// src/config.js solo lo importa y lo expone como
-// CONFIG.helloKittyInspection, sin duplicar valores.
+// la interacción "click para acercar la cámara" (ver
+// src/objectInspection.js — antes específico de la Hello Kitty de la
+// mesa, ahora generalizado: el cuadro de la pared reutiliza esta MISMA
+// configuración, sin archivo propio, tal como se pidió al añadirlo).
+// Mismo patrón que el resto de sistemas: este archivo es responsabilidad
+// exclusiva de esta interacción, y src/config.js solo lo importa y lo
+// expone como CONFIG.helloKittyInspection, sin duplicar valores (se
+// mantiene este nombre de archivo/clave por ser el original; no afecta
+// a qué objetivos lo usan).
 //
-// Nada de esto es una posición de cámara hardcodeada: helloKittyInspection.js
+// Nada de esto es una posición de cámara hardcodeada: objectInspection.js
 // calcula la posición/target reales a partir de la bounding box real de
-// la Kitty ya cargada (THREE.Box3) y de la orientación real de su
-// grupo — estos valores son solo los parámetros de ese cálculo (cuánto
+// cada objetivo ya cargado/construido (THREE.Box3) y de su orientación
+// real — estos valores son solo los parámetros de ese cálculo (cuánto
 // debe ocupar en pantalla, cuánto puede acercarse/alejarse como máximo,
 // cuánto duran las transiciones).
 // -----------------------------------------------------------------------
