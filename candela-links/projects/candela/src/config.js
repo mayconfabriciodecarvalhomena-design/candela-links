@@ -49,6 +49,7 @@ import { SFX_CONFIG } from "./config/sfx.config.js";
 import { FLAME_WORDS_CONFIG } from "./config/flameWords.config.js";
 import { PICTURE_FRAME_CONFIG } from "./config/pictureFrame.config.js";
 import { FINALE_CONFIG } from "./config/finale.config.js";
+import { RESPONSIVE_CONFIG } from "./config/responsive.config.js";
 
 // La vela sigue con su configuración definida directamente aquí abajo,
 // dentro de CONFIG, porque todavía no se ha hecho su separación a
@@ -277,4 +278,13 @@ export const CONFIG = {
   // expone, mismo criterio que el resto de sistemas.
   // -----------------------------------------------------------------------
   finale: FINALE_CONFIG,
+
+  // -----------------------------------------------------------------------
+  // RESPONSIVE: adaptación de cámara/carta a distintos tamaños de
+  // viewport (ver src/responsiveLayout.js + src/scene.js +
+  // src/candelaFinale.js). Fuente de verdad real:
+  // src/config/responsive.config.js. Aquí solo se importa y se expone,
+  // mismo criterio que el resto de sistemas.
+  // -----------------------------------------------------------------------
+  responsive: RESPONSIVE_CONFIG,
 };

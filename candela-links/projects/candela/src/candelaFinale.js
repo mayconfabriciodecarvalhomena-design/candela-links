@@ -5,6 +5,7 @@ import { onWickReady } from "./candle.js";
 import { EMBER_VERTEX_SHADER, EMBER_FRAGMENT_SHADER } from "./flameShader.js";
 import { createEnvelopeMesh } from "./envelopeMesh.js";
 import { createLetterMesh } from "./letterMesh.js";
+import { getResponsiveLayout } from "./responsiveLayout.js";
 
 // -----------------------------------------------------------------------
 // CANDELA FINALE (primera parte + segunda parte): la transición desde
@@ -482,9 +483,24 @@ export function createCandelaFinale({ scene, camera, flame }) {
       .addScaledVector(forward, -cfg.letter.emerge.startForwardOffset)
       .addScaledVector(up, cfg.letter.emerge.startHeight);
 
+    // ITERACIÓN — RESPONSIVE (ver el encargo: "la carta se ve demasiado
+    // pequeña en móvil vertical"): `finalDistanceFromCamera` (0.54, base
+    // SIN TOCAR) se reduce hasta CONFIG.responsive.letter.maxExtraCloseness
+    // como mucho, proporcional a `t` (0 en desktop → esta línea da
+    // EXACTAMENTE cfg.letter.emerge.finalDistanceFromCamera, cero
+    // cambio de comportamiento). Más cerca de la cámara = más grande en
+    // pantalla, sin tocar la escala del sobre ni el resto de la
+    // secuencia. Se calcula aquí (una vez, al entrar en LETTER_RISE, con
+    // el viewport real en ESE momento) porque es el mismo sitio donde ya
+    // se fija el resto del recorrido de la carta.
+    const layout = getResponsiveLayout();
+    const responsiveDistance =
+      cfg.letter.emerge.finalDistanceFromCamera -
+      CONFIG.responsive.letter.maxExtraCloseness * layout.t;
+
     letterEmergeEnd
       .copy(camera.position)
-      .addScaledVector(forward, cfg.letter.emerge.finalDistanceFromCamera)
+      .addScaledVector(forward, responsiveDistance)
       .addScaledVector(up, cfg.letter.emerge.finalVerticalOffset);
 
     letterEmergeControl
@@ -796,7 +812,27 @@ export function createCandelaFinale({ scene, camera, flame }) {
       // texto ya visible desde el primer instante en que tiene opacidad
       // > 0— y ahí se queda quieta. Sin pausa de 1s, sin apertura
       // posterior.
-      letter.group.scale.setScalar(cfg.letter.emerge.finalScale);
+      //
+      // ITERACIÓN — RESPONSIVE: finalScale (1.4, base SIN TOCAR) se
+      // multiplica por un factor que va de 1 (desktop, t=0 → escala
+      // EXACTAMENTE 1.4, cero cambio de comportamiento) hasta
+      // CONFIG.responsive.letter.maxScaleMultiplier (portrait completo,
+      // t=1) — ver el encargo: "la carta debe tener un tamaño visual
+      // mínimo razonable en pantalla... basado en el viewport real, no
+      // una escala fija para todos los móviles". Se recalcula cada
+      // frame (barato: getResponsiveLayout() es aritmética pura), así
+      // que si el viewport cambia MIENTRAS la carta está saliendo
+      // (p. ej. girar el móvil a mitad de la animación) el tamaño se
+      // ajusta en vivo, igual que ya hace la cámara en scene.js.
+      {
+        const layout = getResponsiveLayout();
+        const scaleMultiplier = THREE.MathUtils.lerp(
+          1,
+          CONFIG.responsive.letter.maxScaleMultiplier,
+          layout.t
+        );
+        letter.group.scale.setScalar(cfg.letter.emerge.finalScale * scaleMultiplier);
+      }
 
       const t = clamp01(phaseElapsed / cfg.letter.emerge.duration);
       const eased = easeOutCubic(t);

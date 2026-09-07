@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { CONFIG } from "./config.js";
-import { onUpdate } from "./scene.js";
+import { onUpdate, getCameraBaseLookAt } from "./scene.js";
 
 // -----------------------------------------------------------------------
 // OBJECT INSPECTION: click/tap sobre un objeto interactivo registrado
@@ -89,6 +89,15 @@ export function createObjectInspection(scene, camera, renderer, targets) {
   // quaternion en el momento de llamarlo), así que lo recordamos
   // nosotros — hace falta para poder interpolarlo suavemente y para
   // saber exactamente a qué punto volver al salir.
+  //
+  // ITERACIÓN — RESPONSIVE: el valor inicial (CONFIG.camera.lookAt) es
+  // solo el de arranque/escritorio. En pantallas estrechas, scene.js
+  // ahora puede apuntar la cámara a un lookAt distinto (ver
+  // CONFIG.responsive.portrait.lookAtTarget) — por eso, en
+  // enterInspection() de más abajo, este valor se resincroniza SIEMPRE
+  // con el lookAt real vigente (getCameraBaseLookAt()) justo antes de
+  // capturarlo como punto de partida/vuelta, en vez de confiar en este
+  // valor inicial o en cualquier copia antigua.
   const currentLookAt = new THREE.Vector3(...CONFIG.camera.lookAt);
 
   // Vista real de la que se viene, capturada en el momento de entrar
@@ -178,6 +187,16 @@ export function createObjectInspection(scene, camera, renderer, targets) {
     if (state !== STATE.IDLE) return;
     const object3D = target.getObject3D();
     if (!object3D) return;
+
+    // ITERACIÓN — RESPONSIVE: resincroniza con el lookAt REAL vigente
+    // (puede no coincidir con CONFIG.camera.lookAt en pantallas
+    // estrechas, ver la nota junto a la declaración de `currentLookAt`
+    // más arriba) antes de capturarlo como punto de partida/vuelta.
+    // Seguro llamarlo aquí siempre: el guard de arriba garantiza que
+    // solo se llega a esta línea con state === IDLE, es decir, con la
+    // cámara bajo control de scene.js, nunca en mitad de otra
+    // inspección.
+    currentLookAt.copy(getCameraBaseLookAt());
 
     previousPosition.copy(camera.position);
     previousLookAt.copy(currentLookAt);

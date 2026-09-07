@@ -177,7 +177,7 @@ export function trackEvent(eventType, payload = {}) {
 // ---- Heartbeat: ver "DURACIÓN / ÚLTIMA ACTIVIDAD" en la cabecera del
 // archivo. Se arranca UNA vez, desde recordVisit() (el mismo momento en
 // que ya sabemos que ha habido una entrada real a la experiencia). ----
-const HEARTBEAT_INTERVAL_MS = 20000;
+const HEARTBEAT_INTERVAL_MS = 240000; // 4 minutos (antes 20s — ver el encargo de esta iteración)
 let heartbeatStarted = false;
 
 function startHeartbeat() {

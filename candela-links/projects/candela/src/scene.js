@@ -11,6 +11,7 @@ import { createHelloKitty } from "./helloKitty.js";
 import { createFlameWords } from "./flameWords.js";
 import { createPictureFrame } from "./pictureFrame.js";
 import { addDebugLighting } from "./debug.js";
+import { getResponsiveLayout } from "./responsiveLayout.js";
 
 let scene, camera, renderer, clock;
 
@@ -20,62 +21,95 @@ let scene, camera, renderer, clock;
 const updateCallbacks = [];
 
 // -----------------------------------------------------------------------
-// CÁMARA RESPONSIVE (PARTE 2 del encargo — adaptación a móvil).
+// CÁMARA RESPONSIVE (ver el encargo de esta iteración — "sistema
+// responsive dinámico basado en el viewport real", "no solo alejar la
+// cámara", "solución de composición 3D").
 //
-// CONFIG.camera (fov/position/lookAt) está pensada para un encuadre
-// apaisado tipo escritorio (~16:9): mesa, gato, vela, cerillas, espejo y
-// puerta encajan todos en ese ancho. Con esa MISMA cámara fija, un
-// aspect ratio en retrato (móvil típico, ~0.45–0.5) reduce mucho el
-// campo de visión HORIZONTAL respecto al vertical (a igual fov
-// vertical, a menor aspect ratio, menor fov horizontal real) — la mesa,
-// el gato o la puerta pueden quedar cortados por los lados aunque nada
-// de la composición 3D en sí haya cambiado de sitio.
+// CONFIG.camera (fov/position/lookAt, en config.js) sigue siendo la
+// composición de escritorio, SIN TOCAR: en aspect ratio >=
+// CONFIG.responsive.referenceAspect (16:9 — la inmensa mayoría de
+// móviles en horizontal ya caen aquí de forma natural) el resultado es
+// EXACTAMENTE el mismo fov/position/lookAt de siempre.
 //
-// Por debajo de REFERENCE_ASPECT (el aspecto con el que está pensada la
-// composición de escritorio) se recupera parte de ese campo horizontal
-// perdido con dos ajustes graduales — 0 en el propio breakpoint, máximo
-// en NARROW_ASPECT o más estrecho todavía:
-//   1. Se amplía un poco el fov vertical (con un tope, MAX_FOV, para no
-//      caer en distorsión de ojo de pez en los móviles más estrechos).
-//   2. Se aleja la cámara hacia atrás a lo largo de su propia dirección
-//      de mirada real (mismo lookAt, mismo encuadre, solo más lejos, sin
-//      inventar una posición nueva) para compensar el resto sin
-//      depender solo del fov.
+// Por debajo de ese aspect ratio (`t` > 0, ver getResponsiveLayout() en
+// responsiveLayout.js — continuo, derivado del aspect real, nunca de un
+// "es un móvil") se combinan TRES ajustes graduales, con
+// CONFIG.responsive.portrait como extremo (t=1):
 //
-// En aspect ratios de escritorio/tablet apaisada (>= REFERENCE_ASPECT)
-// esto no cambia NADA respecto a como estaba antes de esta iteración:
-// fov y position quedan exactamente en los valores de CONFIG.camera.
+//   1. RECENTRAR el encuadre (lookAt) y la posición de la cámara hacia
+//      el punto medio entre la vela y el gato — los dos elementos de
+//      mayor prioridad narrativa (ver el encargo, sección 4: "1. vela,
+//      2. carta/sobre, 3. gato...") — en vez de simplemente ensanchar
+//      el FOV alrededor del lookAt de escritorio (que incluye también
+//      el espejo/la puerta, de menor prioridad). Esto es lo que evita
+//      "solo hacer zoom out": no es una misma foto más alejada, es una
+//      composición distinta, más cerrada sobre lo importante.
+//   2. Ampliar el FOV vertical, con un tope MODERADO (portrait.maxFov)
+//      para no caer en distorsión de ojo de pez ni encoger de más los
+//      objetos reales.
+//   3. Un retroceso de cámara PEQUEÑO (portrait.maxDollyBack), como
+//      ajuste fino final tras los dos anteriores, no como mecanismo
+//      principal.
+//
+// Ver CONFIG.responsive.portrait (config/responsive.config.js) para los
+// valores concretos y su razonamiento.
 // -----------------------------------------------------------------------
-const REFERENCE_ASPECT = 16 / 9;
-const NARROW_ASPECT = 0.45; // aprox. un móvil en vertical típico (390×844 ≈ 0.46)
-const MAX_FOV = 74;
-const MAX_DOLLY_BACK = 0.85; // unidades de mundo, solo en el caso más extremo
-
 const basePosition = new THREE.Vector3();
 const baseLookAt = new THREE.Vector3();
+const portraitPosition = new THREE.Vector3();
+const portraitLookAt = new THREE.Vector3();
+const blendedPosition = new THREE.Vector3();
+const blendedLookAt = new THREE.Vector3();
 const backDirection = new THREE.Vector3();
 
-function applyResponsiveCamera(aspect) {
-  camera.aspect = aspect;
+function applyResponsiveCamera(width, height) {
+  const layout = getResponsiveLayout(width, height);
+  const rc = CONFIG.responsive.portrait;
+
+  camera.aspect = layout.aspect;
+
   basePosition.set(...CONFIG.camera.position);
   baseLookAt.set(...CONFIG.camera.lookAt);
+  portraitPosition.set(...rc.positionTarget);
+  portraitLookAt.set(...rc.lookAtTarget);
 
-  if (aspect >= REFERENCE_ASPECT) {
-    camera.fov = CONFIG.camera.fov;
-    camera.position.copy(basePosition);
-  } else {
-    const t = THREE.MathUtils.clamp(
-      (REFERENCE_ASPECT - aspect) / (REFERENCE_ASPECT - NARROW_ASPECT),
-      0,
-      1
-    );
-    camera.fov = THREE.MathUtils.lerp(CONFIG.camera.fov, MAX_FOV, t);
-    backDirection.copy(basePosition).sub(baseLookAt).normalize();
-    camera.position.copy(basePosition).addScaledVector(backDirection, MAX_DOLLY_BACK * t);
-  }
+  // t=0 → blended* queda EXACTAMENTE en basePosition/baseLookAt (lerp
+  // con alpha 0 devuelve el propio valor de partida): composición de
+  // escritorio intacta, byte a byte igual que antes de esta iteración.
+  blendedPosition.copy(basePosition).lerp(portraitPosition, layout.t);
+  blendedLookAt.copy(baseLookAt).lerp(portraitLookAt, layout.t);
 
-  camera.lookAt(baseLookAt);
+  camera.fov = THREE.MathUtils.lerp(CONFIG.camera.fov, rc.maxFov, layout.t);
+
+  backDirection.copy(blendedPosition).sub(blendedLookAt).normalize();
+  camera.position.copy(blendedPosition).addScaledVector(backDirection, rc.maxDollyBack * layout.t);
+
+  camera.lookAt(blendedLookAt);
   camera.updateProjectionMatrix();
+
+  return layout;
+}
+
+// -----------------------------------------------------------------------
+// getCameraBaseLookAt(): expone el ÚLTIMO lookAt "base" aplicado por
+// applyResponsiveCamera (el CONFIG.camera.lookAt de escritorio, o su
+// mezcla con CONFIG.responsive.portrait.lookAtTarget en pantallas
+// estrechas) — nunca el lookAt de una inspección de objeto en curso
+// (objectInspection.js, que mueve la cámara temporalmente y siempre
+// vuelve exactamente a la vista de la que venía).
+//
+// NECESARIO desde esta iteración (antes de la adaptación responsive de
+// cámara, el lookAt real de la cámara SIEMPRE coincidía con
+// CONFIG.camera.lookAt, así que objectInspection.js podía asumirlo como
+// una constante). Ahora, en portrait, el lookAt real puede ser distinto
+// de CONFIG.camera.lookAt (ver arriba), así que objectInspection.js
+// necesita poder leer el valor REAL vigente en cada momento — ver la
+// nota junto a `currentLookAt` en objectInspection.js. Devuelve una
+// copia (nunca la referencia interna) para que quien la reciba no pueda
+// mutar el estado de este módulo por accidente.
+// -----------------------------------------------------------------------
+export function getCameraBaseLookAt() {
+  return blendedLookAt.clone();
 }
 
 export function initScene() {
@@ -88,7 +122,7 @@ export function initScene() {
     CONFIG.camera.near,
     CONFIG.camera.far
   );
-  applyResponsiveCamera(window.innerWidth / window.innerHeight);
+  applyResponsiveCamera(window.innerWidth, window.innerHeight);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -141,7 +175,19 @@ export function initScene() {
 
   clock = new THREE.Clock();
 
+  // ITERACIÓN — ver el encargo: "recalcular mediante resize y, si es
+  // necesario, orientationchange; evita crear listeners duplicados".
+  // Ambos disparan exactamente el mismo onResize (window.innerWidth/
+  // innerHeight en el momento de la llamada, no un valor cacheado en el
+  // propio evento) — "resize" ya cubre casi todos los casos por sí solo
+  // en navegadores actuales, "orientationchange" es un respaldo
+  // adicional para el giro de dispositivo en algunos navegadores/
+  // versiones donde "resize" puede llegar con un frame de retraso.
+  // initScene() se llama UNA sola vez por carga de página (ver
+  // main.js), así que estos addEventListener también se registran una
+  // sola vez — sin riesgo de duplicados.
   window.addEventListener("resize", onResize);
+  window.addEventListener("orientationchange", onResize);
 
   animate();
 
@@ -210,7 +256,7 @@ function addAmbientLight() {
 }
 
 function onResize() {
-  applyResponsiveCamera(window.innerWidth / window.innerHeight);
+  applyResponsiveCamera(window.innerWidth, window.innerHeight);
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
