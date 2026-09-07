@@ -216,6 +216,12 @@ export function createFlameWords(scene, camera) {
   //   del final de Candela); este módulo no sabe nada de sobres ni de
   //   llama creciendo, solo avisa de que ya no queda ninguna frase más
   //   por mostrar.
+  //
+  //   "sequence-started" (añadido para PARTE 1 — ANALÍTICA) → se emite
+  //   UNA vez, exactamente cuando empieza a formarse la PRIMERA frase de
+  //   la secuencia automática (ver updateAutoSequence() más abajo, mismo
+  //   criterio de "punto real" que "sequence-completed"). Tampoco se
+  //   emite en modo manual.
   // -----------------------------------------------------------------------
   const listeners = new Map();
 
@@ -416,6 +422,16 @@ export function createFlameWords(scene, camera) {
         emit("sequence-completed");
         return;
       }
+
+      // ITERACIÓN — ANALÍTICA: "sequence-started" se emite UNA única vez,
+      // exactamente cuando la PRIMERA frase de la secuencia automática
+      // empieza a formarse de verdad (mismo punto real que show(), no un
+      // instante aproximado) — mismo patrón que "sequence-completed" al
+      // otro extremo de la secuencia (ver comentario junto a `listeners`
+      // más arriba). autoIndex === 0 identifica inequívocamente esa
+      // primera frase, tanto en el flujo normal como si startAutoSequence()
+      // se llama a mano desde consola con una lista propia.
+      if (autoIndex === 0) emit("sequence-started");
 
       show(autoWords[autoIndex]);
       autoIndex++;

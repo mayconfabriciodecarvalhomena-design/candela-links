@@ -438,7 +438,7 @@ export function createLetterWriteControls(camera, renderer, candelaFinale) {
     input.style.top = `${rect.top + topInset}px`;
     input.style.width = `${Math.max(0, rect.width - sideInset * 2)}px`;
     input.style.height = `${Math.max(0, rect.height - topInset - bottomInset)}px`;
-    input.style.fontSize = `${Math.max(8, rect.height * fontSizeRatio)}px`;
+    input.style.fontSize = `${Math.max(16, rect.height * fontSizeRatio)}px`;
     input.style.lineHeight = `${Math.max(10, rect.height * lineHeightRatio)}px`;
     input.classList.add("is-active");
 

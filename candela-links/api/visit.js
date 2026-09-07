@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'method_not_allowed' });
   }
 
-  const { slug, session_id } = req.body || {};
+  const { slug, session_id, device_id } = req.body || {};
 
   // slug es opcional (p. ej. pruebas locales sin enlace de por medio):
   // si viene, debe tener el mismo formato que ya valida /api/resolve.js.
@@ -32,10 +32,17 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'invalid_session_id' });
     }
   }
+  // device_id (nuevo, ver PARTE 1 del encargo de analítica): igual de
+  // opcional/best-effort que session_id, mismo límite de longitud.
+  if (device_id !== undefined && device_id !== null) {
+    if (typeof device_id !== 'string' || device_id.length > 128) {
+      return res.status(400).json({ error: 'invalid_device_id' });
+    }
+  }
 
   const { error } = await supabase
     .from('visits')
-    .insert({ link_slug: slug || null, session_id: session_id || null });
+    .insert({ link_slug: slug || null, session_id: session_id || null, device_id: device_id || null });
 
   if (error) {
     console.error(error);

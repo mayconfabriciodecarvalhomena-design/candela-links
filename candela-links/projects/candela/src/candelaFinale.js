@@ -666,6 +666,12 @@ export function createCandelaFinale({ scene, camera, flame }) {
         placeEnvelopeAtAnchor();
         phase = PHASE.MATERIALIZE;
         phaseElapsed = 0;
+        // ITERACIÓN — ANALÍTICA: punto exacto en el que el sobre pasa a
+        // estar visible de verdad (objeto físico ya colocado en su
+        // anchor, iniciando su aparición — ver placeEnvelopeAtAnchor()/
+        // envelope.setAppearance() justo arriba). Antes de esto solo
+        // existían las partículas formando su contorno, nunca el sobre.
+        emit("envelope-shown");
       }
       return;
     }
@@ -928,14 +934,34 @@ export function createCandelaFinale({ scene, camera, flame }) {
     return phase === PHASE.FINAL_HOLD || phase === PHASE.DONE;
   }
 
+  // ITERACIÓN — ANALÍTICA: se emite "page-changed" con la página real
+  // de origen/destino (0-based, mismo índice que getCurrentPage(), sin
+  // convertir a 1-based aquí — quien consuma el evento para analítica
+  // decide su propio formato de cara al usuario). Solo se emite si
+  // letter.nextPage()/previousPage() de verdad ha iniciado la
+  // transición (mismo `true`/`false` que ya usa el resto del proyecto
+  // para saber si el límite estaba activo) — así un click contra el
+  // límite (primera/última hoja) nunca genera un "page-changed" falso.
+  // `to` se calcula como from±1 (nunca leyendo letter.getCurrentPage()
+  // aquí): esa función sigue devolviendo la página ANTERIOR mientras
+  // dura la animación del pase (order[] solo se reordena al terminar
+  // el giro, ver letterMesh.js), así que leerla en este mismo instante
+  // daría el índice viejo, no el real destino ya validado arriba por
+  // nextPage()/previousPage().
   function nextPage() {
     if (!isLetterReadable()) return false;
-    return letter.nextPage();
+    const from = letter.getCurrentPage();
+    const moved = letter.nextPage();
+    if (moved) emit("page-changed", { from, to: from + 1 });
+    return moved;
   }
 
   function previousPage() {
     if (!isLetterReadable()) return false;
-    return letter.previousPage();
+    const from = letter.getCurrentPage();
+    const moved = letter.previousPage();
+    if (moved) emit("page-changed", { from, to: from - 1 });
+    return moved;
   }
 
   function getCurrentPage() {

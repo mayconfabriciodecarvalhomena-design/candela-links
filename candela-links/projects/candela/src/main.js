@@ -17,7 +17,7 @@ import { createCandelaFinale } from "./candelaFinale.js";
 import { createLetterPageControls } from "./letterPageControls.js";
 import { createLetterWriteControls } from "./letterWriteControls.js";
 import { hasVisitedBefore, markVisited, skipToLetterReady, isNarrativeSuppressed } from "./skipIntro.js";
-import { recordVisit } from "./visits.js";
+import { recordVisit, trackEvent } from "./visits.js";
 
 // -----------------------------------------------------------------------
 // ORDEN DE ARRANQUE: la intro se crea y se muestra de inmediato (es
@@ -268,6 +268,35 @@ function startScene() {
   const candelaFinale = createCandelaFinale({ scene, camera, flame });
   flameWords.on("sequence-completed", () => {
     candelaFinale.start();
+  });
+
+  // ITERACIÓN — ANALÍTICA (PARTE 1 del encargo): "candle_words_started"
+  // se dispara en el punto real donde empieza a aparecer la primera
+  // frase de la vela (ver "sequence-started" en flameWords.js, emitido
+  // dentro de updateAutoSequence() exactamente cuando se llama a
+  // show() por primera vez) — nunca en modo manual (candela.flameWords.
+  // show("...") suelto no dispara este evento, igual que ya pasa con
+  // "sequence-completed").
+  flameWords.on("sequence-started", () => {
+    trackEvent("candle_words_started");
+  });
+
+  // "envelope_shown": se dispara en el punto real donde el sobre pasa a
+  // estar visible (ver "envelope-shown" en candelaFinale.js, emitido al
+  // entrar en la fase MATERIALIZE, justo cuando el objeto físico del
+  // sobre se coloca y empieza a aparecer).
+  candelaFinale.on("envelope-shown", () => {
+    trackEvent("envelope_shown");
+  });
+
+  // "page_changed": cada cambio de página de la carta (en cualquier
+  // dirección — ver "page-changed" en candelaFinale.js, emitido tanto
+  // desde nextPage() como desde previousPage()). Los índices de
+  // candelaFinale son 0-based (misma convención que getCurrentPage());
+  // aquí se convierten a 1-based solo de cara a la analítica, para que
+  // "página 1" sea la primera hoja tal y como la vería la persona.
+  candelaFinale.on("page-changed", ({ from, to }) => {
+    trackEvent("page_changed", { from_page: from + 1, to_page: to + 1 });
   });
 
   // -----------------------------------------------------------------------

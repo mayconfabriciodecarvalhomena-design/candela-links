@@ -19,6 +19,65 @@ let scene, camera, renderer, clock;
 // añadamos la llama, el gato, las partículas, etc).
 const updateCallbacks = [];
 
+// -----------------------------------------------------------------------
+// CÁMARA RESPONSIVE (PARTE 2 del encargo — adaptación a móvil).
+//
+// CONFIG.camera (fov/position/lookAt) está pensada para un encuadre
+// apaisado tipo escritorio (~16:9): mesa, gato, vela, cerillas, espejo y
+// puerta encajan todos en ese ancho. Con esa MISMA cámara fija, un
+// aspect ratio en retrato (móvil típico, ~0.45–0.5) reduce mucho el
+// campo de visión HORIZONTAL respecto al vertical (a igual fov
+// vertical, a menor aspect ratio, menor fov horizontal real) — la mesa,
+// el gato o la puerta pueden quedar cortados por los lados aunque nada
+// de la composición 3D en sí haya cambiado de sitio.
+//
+// Por debajo de REFERENCE_ASPECT (el aspecto con el que está pensada la
+// composición de escritorio) se recupera parte de ese campo horizontal
+// perdido con dos ajustes graduales — 0 en el propio breakpoint, máximo
+// en NARROW_ASPECT o más estrecho todavía:
+//   1. Se amplía un poco el fov vertical (con un tope, MAX_FOV, para no
+//      caer en distorsión de ojo de pez en los móviles más estrechos).
+//   2. Se aleja la cámara hacia atrás a lo largo de su propia dirección
+//      de mirada real (mismo lookAt, mismo encuadre, solo más lejos, sin
+//      inventar una posición nueva) para compensar el resto sin
+//      depender solo del fov.
+//
+// En aspect ratios de escritorio/tablet apaisada (>= REFERENCE_ASPECT)
+// esto no cambia NADA respecto a como estaba antes de esta iteración:
+// fov y position quedan exactamente en los valores de CONFIG.camera.
+// -----------------------------------------------------------------------
+const REFERENCE_ASPECT = 16 / 9;
+const NARROW_ASPECT = 0.45; // aprox. un móvil en vertical típico (390×844 ≈ 0.46)
+const MAX_FOV = 74;
+const MAX_DOLLY_BACK = 0.85; // unidades de mundo, solo en el caso más extremo
+
+const basePosition = new THREE.Vector3();
+const baseLookAt = new THREE.Vector3();
+const backDirection = new THREE.Vector3();
+
+function applyResponsiveCamera(aspect) {
+  camera.aspect = aspect;
+  basePosition.set(...CONFIG.camera.position);
+  baseLookAt.set(...CONFIG.camera.lookAt);
+
+  if (aspect >= REFERENCE_ASPECT) {
+    camera.fov = CONFIG.camera.fov;
+    camera.position.copy(basePosition);
+  } else {
+    const t = THREE.MathUtils.clamp(
+      (REFERENCE_ASPECT - aspect) / (REFERENCE_ASPECT - NARROW_ASPECT),
+      0,
+      1
+    );
+    camera.fov = THREE.MathUtils.lerp(CONFIG.camera.fov, MAX_FOV, t);
+    backDirection.copy(basePosition).sub(baseLookAt).normalize();
+    camera.position.copy(basePosition).addScaledVector(backDirection, MAX_DOLLY_BACK * t);
+  }
+
+  camera.lookAt(baseLookAt);
+  camera.updateProjectionMatrix();
+}
+
 export function initScene() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(CONFIG.scene.backgroundColor);
@@ -29,8 +88,7 @@ export function initScene() {
     CONFIG.camera.near,
     CONFIG.camera.far
   );
-  camera.position.set(...CONFIG.camera.position);
-  camera.lookAt(...CONFIG.camera.lookAt);
+  applyResponsiveCamera(window.innerWidth / window.innerHeight);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -152,8 +210,7 @@ function addAmbientLight() {
 }
 
 function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
+  applyResponsiveCamera(window.innerWidth / window.innerHeight);
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
