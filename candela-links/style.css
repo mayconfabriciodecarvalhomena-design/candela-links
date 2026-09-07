@@ -14,7 +14,14 @@ html, body {
 .placeholder h1 { font-weight: 300; letter-spacing: 0.05em; }
 .placeholder p { opacity: 0.7; line-height: 1.5; }
 
-.not-found { padding: 2rem; opacity: 0.6; }
+.not-found { padding: 2rem; opacity: 0.6; text-align: center; }
+.retry-button {
+  margin-top: 1rem;
+  padding: 0.6rem 1.4rem;
+  font: inherit;
+  cursor: pointer;
+  opacity: 1;
+}
 
 #message-box {
   position: fixed; bottom: 20px; right: 20px; z-index: 1000;

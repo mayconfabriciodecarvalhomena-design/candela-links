@@ -80,6 +80,17 @@ export function createLetterPageControls(camera, renderer, candelaFinale) {
   // nunca superpuestas al texto ni pegadas al canto.
   const EDGE_MARGIN = 0.045;
 
+  // Margen defensivo (px) respecto al borde real del viewport: red de
+  // seguridad ADEMÁS del ajuste geométrico de candelaFinale.js
+  // (computeSafeLetterScale, que ya calcula la escala de la carta para
+  // dejar hueco a estas flechas) — no lo sustituye. Si, por lo que sea
+  // (una combinación de aspect ratio no cubierta, el propio tamaño real
+  // del botón, notch/safe-area del dispositivo...), el punto proyectado
+  // cae fuera del viewport o pegado a su borde, esto garantiza que la
+  // flecha siga siendo visible y pulsable en vez de quedar cortada o
+  // inaccesible — el fallo que reportaba el encargo de esta iteración.
+  const VIEWPORT_INSET_PX = 28;
+
   function positionArrow(el, worldX, worldY, worldZ) {
     projected.set(worldX, worldY, worldZ).project(camera);
     if (projected.z > 1) {
@@ -89,8 +100,16 @@ export function createLetterPageControls(camera, renderer, candelaFinale) {
       return;
     }
     const rect = domElement.getBoundingClientRect();
-    const x = rect.left + (projected.x * 0.5 + 0.5) * rect.width;
-    const y = rect.top + (-projected.y * 0.5 + 0.5) * rect.height;
+    let x = rect.left + (projected.x * 0.5 + 0.5) * rect.width;
+    let y = rect.top + (-projected.y * 0.5 + 0.5) * rect.height;
+
+    const minX = rect.left + VIEWPORT_INSET_PX;
+    const maxX = rect.right - VIEWPORT_INSET_PX;
+    const minY = rect.top + VIEWPORT_INSET_PX;
+    const maxY = rect.bottom - VIEWPORT_INSET_PX;
+    x = Math.min(Math.max(x, minX), maxX);
+    y = Math.min(Math.max(y, minY), maxY);
+
     el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
   }
 

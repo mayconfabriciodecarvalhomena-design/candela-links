@@ -33,6 +33,44 @@
 // clampados en t=1 (no se extrapola más allá de lo que se ha podido
 // razonar/comprobar).
 // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// CÓMO SE OBTUVIERON estos valores (portrait.*): NO por prueba y error
+// visual (no hay forma de "ver" el resultado desde aquí), sino
+// calculando, con la posición/geometría REAL del proyecto
+// (CONFIG.candle.position = [0.4,1.0,-1.25], CAT_CONFIG.position =
+// [-0.5,1.0,-1.15], ambas ver config.js/cat.config.js), el ángulo
+// horizontal que ocupan la vela y el gato vistos desde distintas
+// combinaciones de posición/lookAt/FOV de cámara, y comprobando cuáles
+// caben dentro del FOV horizontal disponible (que en portrait es mucho
+// más estrecho que el vertical: FOVₕ = 2·atan(tan(FOVᵥ/2)·aspect), así
+// que a aspect≈0.45 un FOV vertical de 76° da solo ~19° de FOV
+// horizontal medio — ese es el recurso realmente escaso en portrait, no
+// el vertical).
+//
+// Con la composición ANTERIOR (maxFov 66°, lookAtTarget x=-0.05) el
+// FOV horizontal medio disponible era de solo ~16.3°, y la vela+el gato
+// solos ya ocupaban prácticamente ese ángulo completo (candle≈9.7°,
+// cat≈10.5° de sus ~16.3° disponibles) — por eso el encuadre quedaba
+// "pegado" a ambos, sin ningún margen para el resto de la habitación:
+// no era que el lado derecho se recortara por una mala posición de
+// cámara, es que casi no sobraba ángulo para NADA más que la vela y el
+// gato mismos. Los valores de abajo (maxFov 76°, lookAtTarget x=0.0,
+// menos desplazado hacia el gato que antes) dejan a ambos con margen
+// real (≈8° y ≈2-4° de aire respectivamente, según el móvil — 76° de
+// FOV vertical es más que antes pero se mantiene por debajo del rango
+// donde empieza a notarse distorsión de ojo de pez, ~85-90°+) — y como
+// consecuencia se recupera visiblemente más habitación alrededor,
+// aunque el espejo y el borde derecho de la mesa (mucho más
+// periféricos, y que en el propio escritorio ya solo entran
+// parcialmente — ver la nota de `mirror` en room.config.js) sigan
+// fuera en el extremo más estrecho: mostrarlos enteros exigiría un FOV
+// vertical superior a 120° (comprobado por cálculo), inviable sin
+// distorsión severa. Verificado numéricamente contra varios aspect
+// ratios de móvil reales (iPhone/Pixel/Galaxy en portrait, ~0.45-0.56)
+// y contra el propio desktop (t=0, sin cambios) — no contra un
+// dispositivo físico, así que sigue siendo el punto de partida a
+// confirmar visualmente, no un cierre definitivo.
+// -----------------------------------------------------------------------
 export const RESPONSIVE_CONFIG = {
   referenceAspect: 16 / 9,
   narrowAspect: 0.45,
@@ -41,63 +79,50 @@ export const RESPONSIVE_CONFIG = {
   // applyResponsiveCamera(). Interpolada linealmente con CONFIG.camera
   // (t=0) según `t`. ----
   portrait: {
-    // FOV vertical máximo — deliberadamente MODERADO (no 80-90°): un
-    // FOV muy amplio introduce distorsión de ojo de pez y, además,
-    // encoge todo lo que hay delante de la cámara (efecto contrario al
-    // que se busca: "los elementos importantes mantengan un tamaño
-    // visual razonable"). La recuperación de encuadre en portrait viene
-    // principalmente de RECENTRAR la composición (lookAtTarget/
-    // positionTarget, abajo), no de forzar un FOV extremo.
-    maxFov: 66,
+    // FOV vertical máximo. Subido de 66° a 76° (ver derivación arriba):
+    // con solo 66° el FOV horizontal resultante en portrait no dejaba
+    // margen ni siquiera para la vela y el gato solos. 76° sigue en
+    // rango "moderado" (no es hasta 85-90°+ cuando el ojo de pez se
+    // vuelve realmente perceptible).
+    maxFov: 76,
 
-    // Retroceso máximo de cámara (unidades de mundo, a lo largo de su
-    // propia dirección de mirada tras recentrar) en el extremo más
-    // estrecho — pequeño a propósito, mismo motivo que maxFov: es solo
-    // el ajuste FINO que queda tras recentrar, no el mecanismo
-    // principal.
+    // Retroceso máximo de cámara (unidades de mundo) — sin cambios,
+    // sigue siendo el ajuste fino final, no el mecanismo principal.
     maxDollyBack: 0.32,
 
     // Punto hacia el que se recentra el ENCUADRE (lookAt) en portrait
-    // completo: punto medio aproximado entre el gato (CAT_CONFIG.
-    // position, x=-0.5, ver cat.config.js) y la vela (CONFIG.candle.
-    // position, x=0.4, ver config.js) — los dos elementos de mayor
-    // prioridad narrativa (ver el encargo: "1. vela, 2. carta/sobre,
-    // 3. gato..."). Al recentrar aquí en vez de ensanchar el FOV de
-    // forma simétrica sobre el lookAt de escritorio (que está pensado
-    // para incluir también el espejo/la puerta, más a la derecha,
-    // x≈1.45+), se sacrifica DELIBERADAMENTE parte de esa zona de menor
-    // prioridad ("resto de la habitación") a cambio de que el gato y la
-    // vela quepan enteros y a buen tamaño — exactamente el orden de
-    // prioridad pedido.
-    lookAtTarget: [-0.05, 1.28, -1.2],
+    // completo. ANTES en x=-0.05 (casi el punto medio exacto entre
+    // vela y gato) — eso por sí solo ya "giraba" la cámara hacia la
+    // izquierda lo suficiente como para consumir la mayor parte del
+    // FOV horizontal disponible, sin dejar margen para nada más (ver
+    // derivación arriba). Con el FOV más amplio de esta iteración ya
+    // no hace falta recentrar tan agresivamente: x=0.0 (más cerca del
+    // x=0.7 de escritorio) basta para que el gato quede dentro de
+    // cuadro con margen real, y conserva más vela+mesa+aire a su
+    // alrededor que antes.
+    lookAtTarget: [0.0, 1.28, -1.2],
 
     // Punto hacia el que se recentra la POSICIÓN de la cámara, mismo
-    // criterio: se desplaza en la misma dirección que el lookAt (para
-    // seguir siendo una vista en diagonal, nunca frontal-plana, mismo
-    // estilo cinematográfico que la composición de escritorio) y se
-    // acerca ligeramente en Z (1.3→1.22) para compensar en parte el
-    // alejamiento que introduce maxDollyBack.
-    positionTarget: [-0.32, 1.55, 1.22],
+    // criterio y misma reducción de desplazamiento que el lookAt de
+    // arriba (mantiene la vista en diagonal, nunca frontal-plana).
+    positionTarget: [0.05, 1.55, 1.25],
   },
 
-  // ---- CARTA — ver candelaFinale.js. Ajuste ADITIVO/MULTIPLICATIVO
-  // sobre cfg.letter.emerge (finale.config.js): NUNCA sustituye
-  // finalScale (1.4) ni finalDistanceFromCamera (0.54), que se
-  // conservan intactos como base — solo se combinan con estos factores,
-  // que valen 1 (escala) y 0 (cercanía extra) en t=0, es decir, cero
-  // cambio de comportamiento en desktop. ----
-  letter: {
-    // Multiplicador ADICIONAL sobre finalScale en el extremo portrait
-    // (t=1): finalScale efectivo = 1.4 × hasta 1.22 ≈ 1.71 como mucho,
-    // nunca sustituyendo el 1.4 base.
-    maxScaleMultiplier: 1.22,
-
-    // Acercamiento ADICIONAL (unidades de mundo RESTADAS a
-    // finalDistanceFromCamera) en el extremo portrait — más cerca de
-    // cámara = más grande en pantalla, sin tocar la escala del sobre ni
-    // el resto de la secuencia. finalDistanceFromCamera (0.54) menos
-    // esto (como mucho 0.10) sigue con margen de sobra sobre el near
-    // plane de la cámara (0.1, ver config.js).
-    maxExtraCloseness: 0.1,
-  },
+  // ---- CARTA — ver candelaFinale.js, computeSafeLetterScale(). A
+  // diferencia de una iteración anterior de este archivo, aquí NO hay
+  // ningún multiplicador de escala "a ojo": la función de
+  // candelaFinale.js calcula, cada vez que hace falta, el ÁNGULO
+  // horizontal y vertical real que ocupan cfg.letter.width/height (ver
+  // finale.config.js) a `finalScale` y a la distancia de cámara
+  // vigente, lo compara contra el FOV horizontal/vertical REAL
+  // disponible en ese instante (camera.fov + aspect actuales, más el
+  // hueco que necesitan las flechas de letterPageControls.js) y solo
+  // reduce la escala por debajo de `finalScale` cuando de verdad no
+  // cabría entera — nunca la amplía por encima de `finalScale` (la
+  // base de escritorio, sin tocar). Con el FOV/recentrado de arriba
+  // esto ya solo entra en juego en los aspect ratios más extremos.
+  // `ARROW_RESERVE_WORLD` (candelaFinale.js) es el margen reservado
+  // para esas flechas; debe mantenerse en sintonía con `EDGE_MARGIN`
+  // de letterPageControls.js.
+  letter: {},
 };

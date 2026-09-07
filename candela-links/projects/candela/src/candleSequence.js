@@ -29,7 +29,7 @@ import { CONFIG } from "./config.js";
 // pedir un apagado automático y CUÁNDO ha terminado la secuencia.
 // -----------------------------------------------------------------------
 
-export const CANDLE_SEQUENCE_STATE = {
+const CANDLE_SEQUENCE_STATE = {
   IDLE: "idle", // todavía no se ha encendido la vela ni una vez
   FIRST_LIGHT: "first-light", // primer encendido, temporizador en marcha
   FIRST_EXTINGUISH: "first-extinguish", // apagada tras el primer encendido, esperando el segundo

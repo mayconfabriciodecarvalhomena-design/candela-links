@@ -5,7 +5,6 @@ import { onWickReady } from "./candle.js";
 import { EMBER_VERTEX_SHADER, EMBER_FRAGMENT_SHADER } from "./flameShader.js";
 import { createEnvelopeMesh } from "./envelopeMesh.js";
 import { createLetterMesh } from "./letterMesh.js";
-import { getResponsiveLayout } from "./responsiveLayout.js";
 
 // -----------------------------------------------------------------------
 // CANDELA FINALE (primera parte + segunda parte): la transición desde
@@ -41,6 +40,50 @@ import { getResponsiveLayout } from "./responsiveLayout.js";
 //   const finale = createCandelaFinale({ scene, camera, flame });
 //   flameWords.on("sequence-completed", () => finale.start());
 // -----------------------------------------------------------------------
+
+// -----------------------------------------------------------------------
+// computeSafeLetterScale(): calcula, por GEOMETRÍA real (no a ojo), la
+// escala máxima a la que `cfg.letter.width × cfg.letter.height` (ver
+// finale.config.js) cabe entera dentro del FOV disponible de la cámara
+// a una distancia dada — dejando además hueco lateral para las flechas
+// de página (letterPageControls.js las coloca justo fuera del borde de
+// la carta, con su propio EDGE_MARGIN + el ancho real del botón; ver
+// ARROW_RESERVE_WORLD más abajo, que debe cubrir ambos).
+//
+// Por qué hace falta esto y un multiplicador fijo (como tenía una
+// iteración anterior de este archivo) no basta: el FOV HORIZONTAL
+// disponible depende del aspect ratio real del viewport (FOVₕ =
+// 2·atan(tan(FOVᵥ/2)·aspect) — a menor aspect, mucho menor FOVₕ para el
+// MISMO FOVᵥ), así que "cuánto se puede agrandar la carta sin que se
+// salga" no es un número fijo por dispositivo: varía con cada
+// combinación real de ancho/alto de pantalla. Esta función se puede
+// llamar en cualquier momento (no solo en el extremo portrait) con el
+// aspect/FOV/distancia vigentes en ESE instante.
+//
+// Nunca devuelve un valor mayor que `desiredScale` (nunca amplía la
+// carta más allá de lo que ya se había decidido, p. ej. finalScale):
+// solo reduce cuando el hueco real disponible es menor que eso.
+// -----------------------------------------------------------------------
+const ARROW_RESERVE_WORLD = 0.09; // ver EDGE_MARGIN (0.045) en letterPageControls.js + hueco aprox. del propio botón
+
+function computeSafeLetterScale(desiredScale, distance, cameraFovDeg, aspect, letterWidth, letterHeight) {
+  const halfVertRad = THREE.MathUtils.degToRad(cameraFovDeg / 2);
+  const halfHorizRad = Math.atan(Math.tan(halfVertRad) * aspect);
+
+  const maxHalfWidth = Math.max(0, Math.tan(halfHorizRad) * distance - ARROW_RESERVE_WORLD);
+  const maxHalfHeight = Math.tan(halfVertRad) * distance;
+
+  const scaleByWidth = (2 * maxHalfWidth) / letterWidth;
+  const scaleByHeight = (2 * maxHalfHeight) / letterHeight;
+
+  // Suelo defensivo (nunca colapsar a un tamaño ilegible ni a 0 en un
+  // caso límite de aspect ratio extremo no contemplado) — muy por
+  // debajo de cualquier resultado esperado en la práctica (ver los
+  // cálculos numéricos que acompañan el informe de esta iteración).
+  const MIN_SAFE_SCALE = 0.6;
+
+  return Math.max(MIN_SAFE_SCALE, Math.min(desiredScale, scaleByWidth, scaleByHeight));
+}
 
 const PHASE = {
   IDLE: "idle",
@@ -276,6 +319,11 @@ export function createCandelaFinale({ scene, camera, flame }) {
   let letterEmergeControl = new THREE.Vector3();
   let letterEmergeEnd = new THREE.Vector3();
   let letterRestPosition = new THREE.Vector3();
+  // Distancia cámara→carta vigente (cfg.letter.emerge.
+  // finalDistanceFromCamera, SIN TOCAR — ver computeLetterEmergePath()),
+  // reutilizada por computeSafeLetterScale() para saber a qué distancia
+  // se está evaluando el ajuste de escala.
+  let letterFinalDistance = cfg.letter.emerge.finalDistanceFromCamera;
   // Fijado una vez al cargar el módulo (no en cada aparición): mismo
   // criterio que `travelLateralSign` arriba — la curva de salida de la
   // carta se desvía siempre hacia el mismo lado dentro de una misma
@@ -483,24 +531,23 @@ export function createCandelaFinale({ scene, camera, flame }) {
       .addScaledVector(forward, -cfg.letter.emerge.startForwardOffset)
       .addScaledVector(up, cfg.letter.emerge.startHeight);
 
-    // ITERACIÓN — RESPONSIVE (ver el encargo: "la carta se ve demasiado
-    // pequeña en móvil vertical"): `finalDistanceFromCamera` (0.54, base
-    // SIN TOCAR) se reduce hasta CONFIG.responsive.letter.maxExtraCloseness
-    // como mucho, proporcional a `t` (0 en desktop → esta línea da
-    // EXACTAMENTE cfg.letter.emerge.finalDistanceFromCamera, cero
-    // cambio de comportamiento). Más cerca de la cámara = más grande en
-    // pantalla, sin tocar la escala del sobre ni el resto de la
-    // secuencia. Se calcula aquí (una vez, al entrar en LETTER_RISE, con
-    // el viewport real en ESE momento) porque es el mismo sitio donde ya
-    // se fija el resto del recorrido de la carta.
-    const layout = getResponsiveLayout();
-    const responsiveDistance =
-      cfg.letter.emerge.finalDistanceFromCamera -
-      CONFIG.responsive.letter.maxExtraCloseness * layout.t;
+    // ITERACIÓN — RESPONSIVE: la distancia cámara→carta se mantiene
+    // SIEMPRE en cfg.letter.emerge.finalDistanceFromCamera (0.54, base
+    // SIN TOCAR) — a diferencia de una iteración anterior, ya no se
+    // acerca la carta en portrait. Motivo (ver computeSafeLetterScale()
+    // más arriba y el informe de esta iteración): para un ángulo
+    // objetivo fijo en pantalla, la escala que hace falta es
+    // proporcional a la distancia — acercar la cámara no aumenta el
+    // tamaño APARENTE que puede alcanzar la carta una vez se calcula su
+    // escala máxima de forma correcta, solo cambia la escala numérica
+    // necesaria para llegar a ese mismo ángulo. Mantener la distancia
+    // fija simplifica el sistema (un parámetro menos que sincronizar)
+    // sin perder nada de tamaño real en pantalla.
+    letterFinalDistance = cfg.letter.emerge.finalDistanceFromCamera;
 
     letterEmergeEnd
       .copy(camera.position)
-      .addScaledVector(forward, responsiveDistance)
+      .addScaledVector(forward, letterFinalDistance)
       .addScaledVector(up, cfg.letter.emerge.finalVerticalOffset);
 
     letterEmergeControl
@@ -509,6 +556,55 @@ export function createCandelaFinale({ scene, camera, flame }) {
       .multiplyScalar(0.5)
       .addScaledVector(up, cfg.letter.emerge.arcHeight)
       .addScaledVector(right, cfg.letter.emerge.lateralOffset * letterLateralSign);
+  }
+
+  // -----------------------------------------------------------------------
+  // refreshLetterRestTransform(): mantiene la carta "pegada" a la
+  // cámara (misma posición relativa y misma escala segura calculada por
+  // computeSafeLetterScale) mientras está en FINAL_HOLD/DONE, en vez de
+  // dejar fija para siempre la posición/escala calculadas una única vez
+  // al entrar en LETTER_RISE.
+  //
+  // Por qué hace falta (ver checklist del encargo: "funciona... cuando
+  // se gira el dispositivo" — incluyendo DESPUÉS de que la carta ya
+  // esté quieta, no solo mientras sale del sobre): `letterEmergeEnd` es
+  // un punto de MUNDO fijo, calculado a partir de `camera.position`/
+  // `forward` en el instante en que se calculó. Si el viewport cambia
+  // después (girar el móvil, redimensionar la ventana) la cámara
+  // responsive (scene.js) sí se recoloca, pero antes de este cambio la
+  // carta se quedaba físicamente donde estaba, dejando de estar
+  // centrada delante de la cámara — podía llegar a salirse de encuadre
+  // por completo tras un giro. Recalcular esto cada frame en reposo es
+  // barato (aritmética de vectores) y usa el MISMO cálculo que ya hacía
+  // computeLetterEmergePath() para el punto final, así que el
+  // comportamiento durante la propia animación de salida no cambia en
+  // absoluto — esto solo afecta a lo que ocurre DESPUÉS de que ya
+  // terminó.
+  // -----------------------------------------------------------------------
+  function refreshLetterRestTransform() {
+    camera.updateMatrixWorld(true);
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+
+    letterUp.copy(up);
+    letterFinalDistance = cfg.letter.emerge.finalDistanceFromCamera;
+
+    letterRestPosition
+      .copy(camera.position)
+      .addScaledVector(forward, letterFinalDistance)
+      .addScaledVector(up, cfg.letter.emerge.finalVerticalOffset);
+
+    letter.group.scale.setScalar(
+      computeSafeLetterScale(
+        cfg.letter.emerge.finalScale,
+        letterFinalDistance,
+        camera.fov,
+        camera.aspect,
+        cfg.letter.width,
+        cfg.letter.height
+      )
+    );
   }
 
   // -----------------------------------------------------------------------
@@ -627,6 +723,7 @@ export function createCandelaFinale({ scene, camera, flame }) {
       // ligera"), que nunca toca el sobre, la cámara ni la
       // iluminación.
       idleElapsed += delta;
+      refreshLetterRestTransform();
       const bob = Math.sin(idleElapsed * cfg.idle.frequency * Math.PI * 2) * cfg.idle.amplitude;
       letter.group.position.copy(letterRestPosition).addScaledVector(letterUp, bob);
       return;
@@ -813,26 +910,28 @@ export function createCandelaFinale({ scene, camera, flame }) {
       // > 0— y ahí se queda quieta. Sin pausa de 1s, sin apertura
       // posterior.
       //
-      // ITERACIÓN — RESPONSIVE: finalScale (1.4, base SIN TOCAR) se
-      // multiplica por un factor que va de 1 (desktop, t=0 → escala
-      // EXACTAMENTE 1.4, cero cambio de comportamiento) hasta
-      // CONFIG.responsive.letter.maxScaleMultiplier (portrait completo,
-      // t=1) — ver el encargo: "la carta debe tener un tamaño visual
-      // mínimo razonable en pantalla... basado en el viewport real, no
-      // una escala fija para todos los móviles". Se recalcula cada
-      // frame (barato: getResponsiveLayout() es aritmética pura), así
-      // que si el viewport cambia MIENTRAS la carta está saliendo
-      // (p. ej. girar el móvil a mitad de la animación) el tamaño se
-      // ajusta en vivo, igual que ya hace la cámara en scene.js.
-      {
-        const layout = getResponsiveLayout();
-        const scaleMultiplier = THREE.MathUtils.lerp(
-          1,
-          CONFIG.responsive.letter.maxScaleMultiplier,
-          layout.t
-        );
-        letter.group.scale.setScalar(cfg.letter.emerge.finalScale * scaleMultiplier);
-      }
+      // ITERACIÓN — RESPONSIVE: en vez de un multiplicador fijo sobre
+      // finalScale (1.4, base SIN TOCAR — ver computeSafeLetterScale()
+      // en la cabecera del archivo para la explicación completa), la
+      // escala se calcula cada frame como la MAYOR posible que sigue
+      // cabiendo entera (con hueco para las flechas) en el FOV
+      // horizontal/vertical REAL de la cámara en ese instante — nunca
+      // mayor que finalScale. En desktop (FOV horizontal amplio) el
+      // resultado es siempre exactamente finalScale, cero cambio de
+      // comportamiento; solo se reduce por debajo en aspect ratios
+      // estrechos donde de verdad hace falta. Recalculado cada frame
+      // (barato) para seguir correcto si el viewport cambia mientras la
+      // carta está saliendo.
+      letter.group.scale.setScalar(
+        computeSafeLetterScale(
+          cfg.letter.emerge.finalScale,
+          letterFinalDistance,
+          camera.fov,
+          camera.aspect,
+          cfg.letter.width,
+          cfg.letter.height
+        )
+      );
 
       const t = clamp01(phaseElapsed / cfg.letter.emerge.duration);
       const eased = easeOutCubic(t);
@@ -869,7 +968,11 @@ export function createCandelaFinale({ scene, camera, flame }) {
       // 7) Estado final estable (ver sección 7 del encargo): pausa
       // corta antes de considerar la secuencia completamente
       // terminada. La carta, el mensaje y el sobre ya no cambian de
-      // aquí en adelante salvo la respiración muy sutil de DONE.
+      // aquí en adelante salvo la respiración muy sutil de DONE — salvo
+      // reajustarse a la cámara si el viewport cambia (ver
+      // refreshLetterRestTransform() y su comentario).
+      refreshLetterRestTransform();
+      letter.group.position.copy(letterRestPosition);
       if (phaseElapsed >= cfg.finalHold.duration) {
         phase = PHASE.DONE;
         idleElapsed = 0;
@@ -1255,9 +1358,4 @@ function easeOutBack(t) {
 function easeOutCubic(t) {
   const x = clamp01(t);
   return 1 - Math.pow(1 - x, 3);
-}
-
-function easeInCubic(t) {
-  const x = clamp01(t);
-  return x * x * x;
 }
