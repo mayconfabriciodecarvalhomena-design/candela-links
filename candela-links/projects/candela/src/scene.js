@@ -33,23 +33,37 @@ const updateCallbacks = [];
 //
 // Por debajo de ese aspect ratio (`t` > 0, ver getResponsiveLayout() en
 // responsiveLayout.js — continuo, derivado del aspect real, nunca de un
-// "es un móvil") se combinan TRES ajustes graduales, con
+// "es un móvil") se combinan DOS ajustes graduales, con
 // CONFIG.responsive.portrait como extremo (t=1):
 //
-//   1. RECENTRAR el encuadre (lookAt) y la posición de la cámara hacia
-//      el punto medio entre la vela y el gato — los dos elementos de
-//      mayor prioridad narrativa (ver el encargo, sección 4: "1. vela,
-//      2. carta/sobre, 3. gato...") — en vez de simplemente ensanchar
-//      el FOV alrededor del lookAt de escritorio (que incluye también
-//      el espejo/la puerta, de menor prioridad). Esto es lo que evita
-//      "solo hacer zoom out": no es una misma foto más alejada, es una
-//      composición distinta, más cerrada sobre lo importante.
+//   1. RETROCEDER la cámara (portrait.maxDollyBack) a lo largo de su
+//      MISMA dirección de mirada de escritorio — condición NECESARIA:
+//      comprobado numéricamente que, por debajo de un umbral de
+//      retroceso (≈3 unidades), la puerta y el espejo se quedan en 0%
+//      de visibilidad sin importar cuánto suba el FOV. Alejar la cámara
+//      reduce el tamaño angular de toda la habitación proporcionalmente,
+//      así que el hFov (aunque siga siendo estrecho en grados) cubre una
+//      franja de mundo mucho más ancha.
 //   2. Ampliar el FOV vertical, con un tope MODERADO (portrait.maxFov)
 //      para no caer en distorsión de ojo de pez ni encoger de más los
-//      objetos reales.
-//   3. Un retroceso de cámara PEQUEÑO (portrait.maxDollyBack), como
-//      ajuste fino final tras los dos anteriores, no como mecanismo
-//      principal.
+//      objetos reales — `camera.fov` en three.js es el FOV VERTICAL, así
+//      que en un aspect ratio estrecho el FOV HORIZONTAL real cae mucho
+//      más de lo que este número sugiere (a fov=56/aspect 16:9 el hFov
+//      real es ≈87°; ese mismo fov=56 a aspect 0.45 da un hFov real de
+//      solo ≈23° — la causa geométrica original del recorte en portrait).
+//      Superado el umbral de retroceso del punto 1, este es el ajuste
+//      con más recorrido por grado — es la palanca principal para
+//      ganar más puerta/espejo SIN aumentar más el retroceso (ver el
+//      razonamiento numérico completo en CONFIG.responsive.portrait,
+//      config/responsive.config.js).
+//
+// `lookAtTarget`/`positionTarget` (CONFIG.responsive.portrait) se dejan
+// IGUALES a CONFIG.camera.lookAt/position a propósito — con esos dos
+// valores iguales a la base, el lerp() de abajo no mueve nada, y la
+// composición en portrait es la MISMA vista de escritorio (gato, vela,
+// mesa, cuadro, y ahora también la mayor parte de puerta/espejo), solo
+// vista desde más lejos y con algo más de FOV vertical — nunca una
+// composición distinta o recentrada sobre un subconjunto de elementos.
 //
 // Ver CONFIG.responsive.portrait (config/responsive.config.js) para los
 // valores concretos y su razonamiento.
