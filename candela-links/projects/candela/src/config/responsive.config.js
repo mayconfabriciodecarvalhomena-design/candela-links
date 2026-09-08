@@ -71,61 +71,57 @@ export const RESPONSIVE_CONFIG = {
   // (parcialmente) puerta/espejo, solo que vista desde más lejos y con
   // algo más de FOV vertical.
   portrait: {
-    // FOV vertical máximo — sigue siendo MODERADO: a este fov, en el
-    // aspect ratio más estrecho contemplado (≈0.45), el FOV HORIZONTAL
-    // real es ≈41° (fov horizontal = 2·atan(tan(fov/2)·aspect); ver la
-    // nota geométrica arriba) — bastante MÁS ESTRECHO que el horizontal
-    // de escritorio (≈87° a fov=56/16:9), así que no hay sensación de
-    // gran angular/ojo de pez: sigue siendo, en términos de campo de
-    // visión horizontal real, una vista más cerrada que la de
-    // escritorio, solo que más alta verticalmente (apropiado para una
-    // pantalla más alta que ancha).
+    // REVISADO (tercera iteración) — bajado de 78 a 58, y `maxDollyBack`
+    // de 3.6 a 0.3 (ver abajo). Las dos iteraciones anteriores subían
+    // este valor porque el retroceso+FOV eran el ÚNICO mecanismo
+    // disponible para meter puerta y espejo en encuadre — ahora existe
+    // `cameraPan` (ver src/cameraPan.js): el usuario gira la cámara
+    // sobre sí misma para descubrir puerta/espejo, así que ya NO hace
+    // falta ensanchar el FOV ni alejar la cámara para conseguir lo
+    // mismo. Ese era el ÚNICO motivo documentado para subir este valor
+    // por encima del FOV de escritorio (56°, ver CONFIG.camera en
+    // config.js) — comprobado numéricamente que no hay ninguna otra
+    // razón (de encuadre vertical de vela/gato/mesa) que lo requiera:
+    // una pantalla portrait tiene proporcionalmente MÁS margen
+    // vertical que una de escritorio, nunca menos, así que el FOV
+    // vertical de escritorio ya encuadra vela/gato/mesa sin recortar.
     //
-    // REVISADO (segunda iteración) — subido de 71 a 78. Comprobado
-    // numéricamente (proyectando las esquinas reales de la puerta y el
-    // espejo) que, por debajo de `maxDollyBack≈3`, la puerta y el
-    // espejo quedan en 0% de visibilidad sin importar cuánto se suba
-    // este valor (hasta 80-84°) — o sea, el retroceso de cámara es
-    // condición NECESARIA, no basta con FOV. Pero, superado ese umbral
-    // de retroceso, el FOV es la palanca con más recorrido por grado:
-    // con `maxDollyBack` FIJO en 3.6 (sin subirlo respecto a la
-    // primera iteración), pasar de 71° a 78° mejora la puerta de ~9%
-    // a ~36% visible y el espejo de ~17% a ~77% visible — así que la
-    // forma correcta de "buscar el mínimo retroceso necesario" (ver el
-    // encargo) es dejar `maxDollyBack` como está y mover este valor,
-    // no al revés.
-    maxFov: 78,
+    // Confirmado con la geometría real que el pan tiene margen de sobra
+    // para llegar a puerta/espejo con la cámara ya prácticamente en su
+    // posición de escritorio (ver `maxDollyBack` abajo y la nota de
+    // cameraPan.config.js): a retroceso ≈0, el ángulo real hasta la
+    // puerta es ≈45.4° y hasta el espejo ≈38.5°, ambos muy por debajo
+    // del techo de seguridad `maxYawDegrees: 58°` de
+    // CAMERA_PAN_CONFIG.limits — no ha hecho falta tocar ese archivo.
+    //
+    // Los 58° que quedan aquí son solo un pequeño margen (+2° sobre los
+    // 56° de escritorio) para los aspect ratios más extremos
+    // contemplados (≈0.45, un móvil muy alto/estrecho), no un
+    // ensanchamiento real de campo de visión — a este fov, en ese
+    // aspect ratio, el FOV horizontal real es ≈29° (fov horizontal =
+    // 2·atan(tan(fov/2)·aspect)), más cerrado que nunca en el resto de
+    // esta iteración: la composición vuelve a sentirse cercana y
+    // cinematográfica, no una habitación diminuta con espacio de sobra.
+    maxFov: 58,
 
-    // Retroceso máximo de cámara (unidades de mundo, a lo largo de su
-    // propia dirección de mirada de ESCRITORIO — ver nota arriba: no
-    // hay recentrado antes de este retroceso) en el extremo más
-    // estrecho.
+    // REVISADO (tercera iteración) — bajado de 3.6 a 0.3. El retroceso
+    // de cámara solo existía como condición necesaria (junto al FOV de
+    // arriba) para meter puerta/espejo en la MISMA vista estática que
+    // el resto de la composición — con `cameraPan` resolviendo esto
+    // por rotación en vez de por traslación/zoom, ese motivo desaparece
+    // (ver nota de `maxFov` arriba). No se deja en 0.0 exacto sino en
+    // 0.3 como margen mínimo de seguridad para los aspect ratios más
+    // extremos (pantallas muy altas/estrechas no contempladas en el
+    // barrido numérico), imperceptible frente a la composición de
+    // escritorio: la cámara en portrait completo (t=1) queda a solo
+    // 0.3 unidades de su posición de escritorio, en vez de a 3.6.
     //
-    // REVISADO (segunda iteración) — mismo valor que antes (3.6), NO
-    // subido: se ha comprobado explícitamente (barrido numérico
-    // proyectando puerta/espejo con `maxDollyBack` de 1.0 a 6.0
-    // combinado con fov de 66 a 84) que este es, aproximadamente, el
-    // MÍNIMO retroceso a partir del cual la puerta y el espejo empiezan
-    // a entrar en encuadre de forma no despreciable con CUALQUIER fov
-    // moderado — por debajo de ~3 unidades ambos se quedan en 0% de
-    // visibilidad incluso a fov=80. Con 3.6 fijo, la mesa, el gato, la
-    // vela, el cuadro completo y la mayor parte del espejo caben en
-    // encuadre en un móvil vertical típico (~390×844), y la puerta pasa
-    // de "una porción mínima" (~9%, iteración anterior) a mostrar una
-    // porción clara de su hoja (~36%, incluido el pomo, su lado más
-    // reconocible) — sin que la cámara dé la sensación de estar fuera
-    // de la habitación (la profundidad real del suelo, ver
-    // ROOM_CONFIG.floor en room.config.js, deja margen de sobra: a
-    // t=1 la cámara queda en z≈4.7, el suelo llega hasta z≈5.2).
-    //
-    // Dato de referencia importante: incluso la composición de
-    // ESCRITORIO original (t=0, sin tocar) ya deja la puerta
-    // parcialmente fuera de encuadre (mismo borde izquierdo/superior
-    // cortado, el pomo/derecha siempre visible) — así que el patrón de
-    // recorte de la puerta en portrait con estos valores es
-    // CONSISTENTE con el de la composición de referencia, no un
-    // criterio nuevo.
-    maxDollyBack: 3.6,
+    // Con este retroceso mínimo, el ángulo real hasta la puerta baja
+    // muy poco respecto al caso de retroceso ≈0 documentado arriba
+    // (de ≈45.4° a ≈44°) — sigue con el mismo margen de sobra sobre el
+    // techo de seguridad de `cameraPan.config.js` (58°), así que el
+    // paneo lateral no queda limitado por este cambio.
+    maxDollyBack: 0.3,
 
     // Sin recentrado (ver nota arriba de este bloque): mismo lookAt que
     // CONFIG.camera.lookAt (config.js). Duplicado aquí a propósito
@@ -152,26 +148,42 @@ export const RESPONSIVE_CONFIG = {
     // (t=1): finalScale efectivo = 1.4 × hasta 1.52 ≈ 2.13 como mucho,
     // nunca sustituyendo el 1.4 base.
     //
-    // REVISADO (segunda iteración) — subido de 1.34 a 1.52,
-    // EXCLUSIVAMENTE como compensación directa de subir
-    // portrait.maxFov (71→78, ver arriba, único cambio de esta
-    // iteración que afecta a la carta). La carta se coloca a una
-    // distancia FIJA en unidades de mundo delante de la cámara
-    // (finalDistanceFromCamera, SIN TOCAR — ver candelaFinale.js/
-    // computeLetterEmergePath), así que su tamaño EN PANTALLA depende
-    // del fov vigente en ese momento (a más fov, el mismo objeto a la
-    // misma distancia ocupa menos pantalla). El factor
-    // 1.52/1.34 ≈ 1.135 es exactamente tan(78°/2)/tan(71°/2) — compensa
-    // ese encogimiento para que la carta ocupe, en portrait completo,
-    // el MISMO tamaño en pantalla que ya tenía con la combinación
-    // anterior (maxFov=71, multiplier=1.34), la que el usuario
-    // confirmó que "está mucho mejor" — no un tamaño MAYOR, solo evita
-    // que se encoja como efecto colateral del nuevo fov. No es un
-    // cambio de criterio de la carta, es la parte de "solo debe
-    // cambiar si es consecuencia directa del nuevo encuadre" (ver el
-    // encargo).
-    maxScaleMultiplier: 1.52,
+    // REVISADO (tercera iteración) — bajado de 1.52 a 1.04, misma
+    // lógica exacta que ya usaba este valor (ver la revisión anterior,
+    // arriba en el historial de este comentario), aplicada ahora en la
+    // dirección contraria: `portrait.maxFov` baja de 78° a 58°, así que
+    // la compensación necesaria para que la carta NO se encoja por
+    // culpa del FOV baja en la misma proporción. La carta sigue
+    // colocándose a una distancia FIJA en unidades de mundo delante de
+    // la cámara (finalDistanceFromCamera, SIN TOCAR — ver
+    // candelaFinale.js/computeLetterEmergePath), así que su tamaño EN
+    // PANTALLA depende únicamente del fov vigente en ese momento. El
+    // nuevo factor es exactamente
+    // 1.52 × tan(58°/2)/tan(78°/2) ≈ 1.52 × 0.6845 ≈ 1.04 — la misma
+    // fórmula tan(fovNuevo/2)/tan(fovAntiguo/2) que ya documentaba la
+    // revisión anterior, solo que ahora fovAntiguo=78 (el valor del que
+    // partimos) y fovNuevo=58 (el nuevo `maxFov` de arriba). Con
+    // maxFov=58 ya muy cercano al FOV real de escritorio (56°), el
+    // resultado (1.04) está correctamente cerca de 1.0 — apenas
+    // compensación, porque apenas hay ensanchamiento de FOV que
+    // compensar. La carta, en portrait completo, vuelve a ocupar en
+    // pantalla prácticamente el mismo tamaño relativo que en
+    // escritorio, sin encogerse ni agrandarse como efecto colateral.
+    maxScaleMultiplier: 1.04,
 
+    // SIN CAMBIOS (tercera iteración) — a diferencia de
+    // `maxScaleMultiplier` arriba, este valor NO se reescala con
+    // tan(fov/2). Comprobado algebraicamente y verificado numéricamente:
+    // como `maxScaleMultiplier` ya se ha reescalado exactamente por
+    // tan(fovNuevo/2)/tan(fovAntiguo/2), ese factor queda completamente
+    // cancelado en el tamaño final en pantalla
+    // (mult/tan(fov/2) = mult_antiguo/tan(fov_antiguo/2) por
+    // construcción) — la parte de la fórmula que depende de la
+    // distancia (`finalDistanceFromCamera - maxExtraCloseness`) es
+    // independiente de ese cambio de FOV, así que tocarla habría
+    // introducido una desviación de tamaño (~7% de encogimiento
+    // adicional no deseado, comprobado numéricamente al simular ambas
+    // versiones). Se deja exactamente en su valor anterior.
     // Acercamiento ADICIONAL (unidades de mundo RESTADAS a
     // finalDistanceFromCamera) en el extremo portrait — más cerca de
     // cámara = más grande en pantalla, sin tocar la escala del sobre ni
