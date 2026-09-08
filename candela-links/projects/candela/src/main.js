@@ -14,6 +14,7 @@ import { createCatHoverLabel } from "./catHover.js";
 import { createObjectInspection } from "./objectInspection.js";
 import { createDoorInteraction } from "./doorInteraction.js";
 import { createCandelaFinale } from "./candelaFinale.js";
+import { createCameraPan } from "./cameraPan.js";
 import { createLetterPageControls } from "./letterPageControls.js";
 import { createLetterWriteControls } from "./letterWriteControls.js";
 import { hasVisitedBefore, markVisited, skipToLetterReady, isNarrativeSuppressed } from "./skipIntro.js";
@@ -324,6 +325,26 @@ function startScene() {
   const letterWriteControls = createLetterWriteControls(camera, renderer, candelaFinale);
 
   // -----------------------------------------------------------------------
+  // PANEO LATERAL DE CÁMARA (exploración táctil puerta ↔ centro ↔
+  // espejo/cuadro — ver src/cameraPan.js). Se crea aquí, y no antes,
+  // porque `isSuspended` necesita referencias reales a `objectInspection`
+  // y `candelaFinale` (ambas ya creadas más arriba en esta función):
+  //   - objectInspection.state !== "IDLE": suspendido mientras se entra,
+  //     se está, o se sale de la inspección de la Kitty/el cuadro (esos
+  //     sistemas ya mueven la cámara por su cuenta durante ese tiempo).
+  //   - candelaFinale.getPhase() !== "idle": suspendido durante TODO el
+  //     final (desde el primer aviso hasta "done", el reposo con la
+  //     carta legible) — cubre explícitamente "un swipe sobre la carta
+  //     no debe mover la cámara".
+  // Mismo patrón exacto que `isCandleLit` en matchesController.js: una
+  // función que este módulo consulta cada frame, sin acoplarse a cómo
+  // cada sistema decide internamente su propio estado.
+  // -----------------------------------------------------------------------
+  const cameraPan = createCameraPan(camera, renderer, {
+    isSuspended: () => objectInspection.state !== "IDLE" || candelaFinale.getPhase() !== "idle",
+  });
+
+  // -----------------------------------------------------------------------
   // SECUENCIA NARRATIVA DE LA VELA: la vela necesita encenderse tres veces
   // (siempre con una cerilla) antes de quedarse encendida para siempre.
   // Las dos primeras veces se apaga sola al cabo de unos segundos y
@@ -500,6 +521,11 @@ function startScene() {
   //     curso o si no hay página siguiente/anterior.
   //   candela.candelaFinale.getCurrentPage() / .getPageCount() /
   //     .isTurning() — estado del sistema de páginas.
+  //   candela.cameraPan.yaw / .yawDegrees — paneo lateral de cámara
+  //     actualmente aplicado (radianes / grados; positivo = hacia la
+  //     puerta, negativo = hacia el espejo/cuadro — ver
+  //     src/cameraPan.js). Solo lectura: se controla arrastrando con el
+  //     dedo sobre el canvas, no hay setter manual expuesto.
   // Todos ya se crean y se añaden a la escena automáticamente desde
   // scene.js; aquí solo se exponen para inspección manual.
   Object.assign(window.candela, {
@@ -515,6 +541,7 @@ function startScene() {
     helloKitty,
     objectInspection,
     doorInteraction,
+    cameraPan,
     candleSequence,
     music,
     sfx,

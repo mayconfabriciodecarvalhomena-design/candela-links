@@ -24,6 +24,13 @@ body {
   display: block;
   width: 100%;
   height: 100%;
+  /* ITERACIÓN — paneo lateral de cámara (src/cameraPan.js): evita que
+     un drag horizontal con el dedo dispare gestos nativos del navegador
+     (scroll/bounce/pull-to-refresh) mientras se está paneando la
+     cámara. No afecta a taps/clicks (matchesController.js, catHover.js,
+     objectInspection.js, doorInteraction.js siguen recibiendo sus
+     eventos de puntero con normalidad) ni a nada de escritorio. */
+  touch-action: none;
 }
 
 /* Texto narrativo (src/narrative.js): frases que aparecen sobre la

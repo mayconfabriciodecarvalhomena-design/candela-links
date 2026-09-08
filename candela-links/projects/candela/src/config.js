@@ -50,6 +50,7 @@ import { FLAME_WORDS_CONFIG } from "./config/flameWords.config.js";
 import { PICTURE_FRAME_CONFIG } from "./config/pictureFrame.config.js";
 import { FINALE_CONFIG } from "./config/finale.config.js";
 import { RESPONSIVE_CONFIG } from "./config/responsive.config.js";
+import { CAMERA_PAN_CONFIG } from "./config/cameraPan.config.js";
 
 // La vela sigue con su configuración definida directamente aquí abajo,
 // dentro de CONFIG, porque todavía no se ha hecho su separación a
@@ -287,4 +288,12 @@ export const CONFIG = {
   // mismo criterio que el resto de sistemas.
   // -----------------------------------------------------------------------
   responsive: RESPONSIVE_CONFIG,
+
+  // -----------------------------------------------------------------------
+  // CAMERA PAN: exploración lateral de cámara por drag/swipe táctil
+  // (puerta ↔ centro ↔ espejo/cuadro — ver src/cameraPan.js). Fuente de
+  // verdad real: src/config/cameraPan.config.js. Aquí solo se importa y
+  // se expone, mismo criterio que el resto de sistemas.
+  // -----------------------------------------------------------------------
+  cameraPan: CAMERA_PAN_CONFIG,
 };

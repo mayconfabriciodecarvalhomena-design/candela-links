@@ -73,8 +73,72 @@ const baseLookAt = new THREE.Vector3();
 const portraitPosition = new THREE.Vector3();
 const portraitLookAt = new THREE.Vector3();
 const blendedPosition = new THREE.Vector3();
+// blendedLookAtBase: el punto de mira "puro" que ya calculaba este
+// archivo antes de esta iteración (solo depende de CONFIG.camera +
+// CONFIG.responsive.portrait + `t`, NUNCA del paneo lateral de abajo).
+// Es el pivote sobre el que gira el paneo — recalculado únicamente en
+// applyResponsiveCamera (init/resize), igual que siempre.
+const blendedLookAtBase = new THREE.Vector3();
+// blendedLookAt: el punto de mira REAL ya aplicado a la cámara en este
+// instante — blendedLookAtBase rotado por panYawOffset (ver
+// applyCameraPan() más abajo). Es lo que devuelve getCameraBaseLookAt(),
+// así que objectInspection.js sigue viendo, sin ningún cambio en ese
+// archivo, "la vista real vigente ahora mismo" — antes esa vista nunca
+// se apartaba de blendedLookAtBase; ahora también puede incluir paneo.
 const blendedLookAt = new THREE.Vector3();
 const backDirection = new THREE.Vector3();
+
+// -----------------------------------------------------------------------
+// PANEO LATERAL DE CÁMARA (exploración táctil izquierda/derecha — ver
+// src/cameraPan.js, que es quien decide EL VALOR de `panYawOffset` a
+// partir del drag del usuario y de los límites geométricos reales de
+// puerta/espejo; este archivo solo sabe "girar la cámara sobre sí misma
+// tantos radianes", nunca calcula límites ni escucha eventos de puntero).
+//
+// Es una ROTACIÓN pura alrededor del eje Y que pasa por camera.position
+// (nunca se traslada la cámara, nunca se toca su Y) — "sentado delante
+// de la mesa, mirando un poco hacia la izquierda o la derecha", tal
+// cual pide el encargo. Se aplica sobre blendedLookAtBase (el pivote sin
+// panear) preservando su distancia exacta a la cámara, así que el punto
+// resultante barre un arco horizontal a esa misma distancia — nunca
+// atraviesa paredes ni cambia de "qué tan lejos mira" la cámara.
+// -----------------------------------------------------------------------
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const panDirection = new THREE.Vector3();
+let panYawOffset = 0;
+
+function applyCameraPan() {
+  panDirection.copy(blendedLookAtBase).sub(camera.position);
+  const distance = panDirection.length();
+  panDirection.normalize();
+  if (panYawOffset !== 0) {
+    panDirection.applyAxisAngle(Y_AXIS, panYawOffset);
+  }
+  blendedLookAt.copy(camera.position).addScaledVector(panDirection, distance);
+  camera.lookAt(blendedLookAt);
+}
+
+// Llamado cada frame por cameraPan.js (con su valor ya amortiguado/
+// clampeado) mientras el paneo no esté suspendido (ver isSuspended en
+// createCameraPan(), main.js) — objectInspection.js y candelaFinale.js
+// NUNCA llaman a esto, así que nunca compiten por la cámara con ellos:
+// cameraPan.js simplemente deja de llamar a esta función mientras dure
+// una inspección o el final, y panYawOffset se queda "congelado" en su
+// último valor (ver la nota de cabecera de cameraPan.js).
+export function setCameraPanYaw(offsetRadians) {
+  panYawOffset = offsetRadians;
+  applyCameraPan();
+}
+
+// Punto de mira "puro" (sin paneo) vigente ahora mismo — lo usa
+// cameraPan.js como referencia para calcular, cada frame, tanto la
+// dirección "de frente" (t=0 de su propio paneo) como los límites
+// izquierdo/derecho reales (ángulo hasta la puerta/el espejo desde
+// camera.position). Devuelve una copia, mismo criterio que
+// getCameraBaseLookAt().
+export function getCameraUnpannedLookAt() {
+  return blendedLookAtBase.clone();
+}
 
 function applyResponsiveCamera(width, height) {
   const layout = getResponsiveLayout(width, height);
@@ -91,26 +155,50 @@ function applyResponsiveCamera(width, height) {
   // con alpha 0 devuelve el propio valor de partida): composición de
   // escritorio intacta, byte a byte igual que antes de esta iteración.
   blendedPosition.copy(basePosition).lerp(portraitPosition, layout.t);
-  blendedLookAt.copy(baseLookAt).lerp(portraitLookAt, layout.t);
+  blendedLookAtBase.copy(baseLookAt).lerp(portraitLookAt, layout.t);
 
   camera.fov = THREE.MathUtils.lerp(CONFIG.camera.fov, rc.maxFov, layout.t);
 
-  backDirection.copy(blendedPosition).sub(blendedLookAt).normalize();
+  backDirection.copy(blendedPosition).sub(blendedLookAtBase).normalize();
   camera.position.copy(blendedPosition).addScaledVector(backDirection, rc.maxDollyBack * layout.t);
 
-  camera.lookAt(blendedLookAt);
+  // ITERACIÓN — paneo lateral: antes esta función terminaba con
+  // `camera.lookAt(blendedLookAt); camera.updateProjectionMatrix();`
+  // usando directamente el punto de mira recién calculado. ahora ese
+  // punto vive en blendedLookAtBase (sin panear) y es applyCameraPan()
+  // quien, a partir de él y del panYawOffset VIGENTE (el que ya
+  // hubiera antes de este resize — nunca se resetea aquí), calcula
+  // blendedLookAt real y llama a camera.lookAt(). Con panYawOffset=0
+  // (valor inicial, antes de que cameraPan.js toque nada) el resultado
+  // es idéntico, ángulo a ángulo, al de siempre.
+  applyCameraPan();
   camera.updateProjectionMatrix();
 
   return layout;
 }
 
 // -----------------------------------------------------------------------
-// getCameraBaseLookAt(): expone el ÚLTIMO lookAt "base" aplicado por
-// applyResponsiveCamera (el CONFIG.camera.lookAt de escritorio, o su
-// mezcla con CONFIG.responsive.portrait.lookAtTarget en pantallas
-// estrechas) — nunca el lookAt de una inspección de objeto en curso
-// (objectInspection.js, que mueve la cámara temporalmente y siempre
-// vuelve exactamente a la vista de la que venía).
+// getCameraBaseLookAt(): expone el ÚLTIMO lookAt "normal" aplicado por
+// este archivo (el CONFIG.camera.lookAt de escritorio, o su mezcla con
+// CONFIG.responsive.portrait.lookAtTarget en pantallas estrechas —
+// SIEMPRE ya con el paneo lateral en curso incluido, ver
+// setCameraPanYaw()/applyCameraPan() arriba) — nunca el lookAt de una
+// inspección de objeto en curso (objectInspection.js, que mueve la
+// cámara temporalmente y siempre vuelve exactamente a la vista de la
+// que venía, paneada o no).
+//
+// ITERACIÓN — paneo lateral: antes de esta iteración este valor NUNCA
+// se apartaba del punto de mira responsive puro (no existía nada más
+// que lo tocase). Ahora también puede incluir el paneo — a propósito:
+// objectInspection.js captura este valor como "vista a la que volver
+// al salir" (previousLookAt), y esa vista SIEMPRE debe ser la que el
+// usuario tenía de verdad justo antes de entrar a inspeccionar,
+// paneada o no — si devolviera el centro puro, salir de una inspección
+// mientras la cámara estaba paneada haría que la vista "saltara" al
+// centro en vez de retomar el paneo. Con este cambio, objectInspection.js
+// no necesita ni una sola línea modificada: sigue leyendo "el lookAt
+// real vigente" exactamente igual que antes, solo que ahora ese valor
+// es más preciso.
 //
 // NECESARIO desde esta iteración (antes de la adaptación responsive de
 // cámara, el lookAt real de la cámara SIEMPRE coincidía con
