@@ -606,6 +606,10 @@ export const FINALE_CONFIG = {
         title: "Para ti",
         text: "Hice este proyecto especialmente para que puedas sentirte un poco más conectada conmigo.\n\nEste es un enlace único que puedo ir cambiando. Quizá la semana que viene encuentres otras palabras, una carta diferente, nuevos elementos o incluso una animación completamente distinta.\n\nLo hice así porque no sé cuánto va a durar este proceso ni cómo va a terminar, pero no quiero sentir que nos alejamos cada vez más. Quiero sentir lo contrario, incluso aunque no estemos hablando.\n\nY ahora quiero darte algo que quizá sea todavía más importante: un espacio para ti.\n\nEn la siguiente página podrás escribirme todo lo que quieras decirme. No te calles nada. Si quieres que te responda, te responderé.\n\nPuedes desahogarte conmigo, contarme lo que sea. Yo te leeré siempre.\n\nHe creado todo esto para que, aunque ahora estemos así, tengas un pequeño lugar donde sentirte cerca de mí y recordar que siempre estaré para ti.\n\nPorque te amo.",
       },
+      {
+        title: "Actualidad Bloqueo Wasap",
+        text: "No se si me diras algo, intento distraerme, ni siquiera se si volveras a pulsar el enlace. me habia esforzado en hacer esto para estar unidos. Ojala saber que pasa por tu cabeza, no tengo nada seguro no se si realmente lo que me dices es verdad i estoy en el momento que menos seguridad tengo de si realmente esto nuestro a sido real. No te echo la culpa, ya te dije no me debes nada, pero es dificil recibir palabras tuyas bonitas i estar esperando siempre un mensaje tuyo. Es por eso que e tenido que bloquearte, i no me hace mmejor pero por lo menos me ayuda a tener autocontrol sobre mi ya que te e desbloqueado varias veces en un dia i me doy cuenta de que no puedo estar asi, tengo que obligarme a controlarme para realmente controlarme. Lo malo es que sea por insta o por wasap sigo esperando algo de ti i espero que en unos dias si realmente no me dices nada deje de esperar ese mensaje i pueda centrarme en mi.",
+      },
       { title: "Ahora escribe tú...", text: "" },
     ],
 
