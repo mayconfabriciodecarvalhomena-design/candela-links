@@ -19,7 +19,8 @@ import { CONFIG } from "./config.js";
 // siendo la única fuente de luz cálida de la escena.
 // -----------------------------------------------------------------------
 
-export function createHelloKitty(scene) {
+export function createHelloKitty(scene, options = {}) {
+  const { onError } = options;
   const cfg = CONFIG.helloKitty;
 
   const group = new THREE.Group();
@@ -74,6 +75,8 @@ export function createHelloKitty(scene) {
     undefined,
     (error) => {
       console.error(`No se pudo cargar ${cfg.modelPath}:`, error);
+      // NUEVO — ver la nota completa en candle.js.
+      if (typeof onError === "function") onError(error);
     }
   );
 

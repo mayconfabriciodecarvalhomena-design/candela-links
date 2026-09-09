@@ -46,7 +46,8 @@ export function onWickReady(callback) {
   }
 }
 
-export function createCandle(scene) {
+export function createCandle(scene, options = {}) {
+  const { onError } = options;
   const group = new THREE.Group();
   group.position.set(...CONFIG.candle.position);
   group.rotation.y = CONFIG.candle.rotationY;
@@ -120,6 +121,16 @@ export function createCandle(scene) {
     undefined,
     (error) => {
       console.error("No se pudo cargar assets/models/candle.glb:", error);
+      // NUEVO (ver el encargo de esta iteración — corrección del fallo de
+      // carga constante): señal directa y sin ambigüedad hacia main.js de
+      // que ESTE recurso concreto, crítico, ha fallado. Antes, la única
+      // vía hacia arriba era THREE.DefaultLoadingManager.onError — un
+      // canal COMPARTIDO por cualquier loader de la escena (incluida la
+      // foto opcional del cuadro en pictureFrame.js, que deliberadamente
+      // NO debe ser fatal), lo que provocaba falsos positivos. Este
+      // callback es opcional (`options.onError` puede no existir) y no
+      // cambia nada del comportamiento anterior si no se pasa.
+      if (typeof onError === "function") onError(error);
     }
   );
 

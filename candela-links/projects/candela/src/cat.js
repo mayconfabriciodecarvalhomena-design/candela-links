@@ -317,6 +317,15 @@ export function createCat(scene, options = {}) {
       if (cfg.placeholder.enabled && !cat.model) {
         createPlaceholder();
       }
+
+      // NUEVO (ver el encargo de esta iteración): señal directa hacia
+      // main.js, sin ambigüedad de qué recurso ha fallado — ver la nota
+      // completa en candle.js. `createPlaceholder()` (arriba) nunca
+      // asigna `cat.model` (solo añade una esfera decorativa de
+      // depuración), así que un fallo real aquí YA dejaba `catModelReady`
+      // permanentemente en `false` antes de este cambio — esto no altera
+      // ese comportamiento, solo lo hace reportable en vez de silencioso.
+      if (typeof options.onError === "function") options.onError(error);
     }
   );
 

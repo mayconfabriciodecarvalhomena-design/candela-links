@@ -300,8 +300,35 @@ export function initScene(options = {}) {
   // pared del fondo (src/pictureFrame.js). Estático, como room.js — no
   // se registra en onUpdate() ni depende de ningún otro sistema, así
   // que basta con instanciarlo aquí, sin tocar nada más.
+  //
+  // A propósito NO participa del canal `onAssetError` de abajo: su foto
+  // (assets/images/cuadro.png) es opcional por diseño — si falla, el
+  // propio pictureFrame.js ya se queda con un marcador de posición
+  // visible y sigue funcionando con normalidad (ver su propio
+  // comentario) — y no gatea ninguno de los flags de "escena lista" en
+  // main.js. Enrutar también este fallo hacia `failScene()` fue,
+  // precisamente, la causa del fallo constante corregido en esta
+  // iteración (ver el diagnóstico completo en la respuesta) — así que
+  // se deja fuera a propósito, no por omisión.
   const pictureFrame = createPictureFrame(scene);
-  createCandle(scene);
+
+  // Cada uno de los tres recursos CRÍTICOS (candle/cat/hello_kitty.glb —
+  // los tres gatean maybeMarkSceneReady() en main.js) recibe su propio
+  // callback de error, ya etiquetado con el recurso concreto que ha
+  // fallado — así main.js no tiene que adivinar nada a partir de una URL
+  // ambigua. Reemplaza, para estos tres recursos, al canal compartido
+  // `THREE.DefaultLoadingManager.onError` (ver main.js) como fuente de
+  // fallos CRÍTICOS — ese canal seguía siendo compartido con
+  // pictureFrame.js (y con cualquier otro loader futuro que no pase su
+  // propio manager), lo que lo hacía ambiguo para decidir qué es
+  // realmente fatal.
+  const reportCriticalAssetError = (resource) => (error) => {
+    if (typeof options.onAssetError === "function") {
+      options.onAssetError({ resource, error });
+    }
+  };
+
+  createCandle(scene, { onError: reportCriticalAssetError("candle.glb") });
   const flame = createFlame(scene);
   // Módulo independiente (src/smoke.js): se suscribe solo a la llama
   // (onFlameExtinguished) y a la mecha (onWickReady), así que basta con
@@ -318,8 +345,11 @@ export function initScene(options = {}) {
   // completo — solo el getter de solo lectura que ya expone flame.js —
   // así cat.js no gana acceso a ignite()/extinguish() ni a nada más de
   // la llama, solo a su progreso de luz.
-  const cat = createCat(scene, { getLightProgress: flame.getLightProgress });
-  const helloKitty = createHelloKitty(scene);
+  const cat = createCat(scene, {
+    getLightProgress: flame.getLightProgress,
+    onError: reportCriticalAssetError("cat.glb"),
+  });
+  const helloKitty = createHelloKitty(scene, { onError: reportCriticalAssetError("hello_kitty.glb") });
   // v0 EXPERIMENTAL, aditivo: no depende de flame.js ni lo modifica (ver
   // src/flameWords.js). Se ancla sola a la mecha real (onWickReady,
   // igual que smoke.js) y solo se activa a mano desde la consola

@@ -129,14 +129,26 @@ intro.onRetry(() => {
 intro.onCompositionSettled(startScene);
 
 // -----------------------------------------------------------------------
-// RECUPERACIÓN DE CARGA (ver el encargo de esta iteración — FASE 2/3/4):
+// RECUPERACIÓN DE CARGA (ver el encargo de esta iteración — FASE 2/3/4,
+// y la corrección posterior del fallo de carga constante):
 // `failScene()` es el ÚNICO punto de entrada para cualquier fallo
 // irrecuperable durante la preparación de la escena — venga de un GLB
-// que nunca termina de cargar (loaders, más abajo), de un timeout, de
-// una excepción síncrona durante `initScene()`/el resto de
-// `startScene()` (try/catch, más abajo) o de una pérdida de contexto
-// WebGL (scene.js). Así solo hay UN sitio que decide qué hacer cuando
-// algo falla — no un sistema paralelo distinto por cada tipo de fallo.
+// crítico que falla al cargar (candle.glb/cat.glb/hello_kitty.glb, vía
+// `onAssetError` — ver más abajo y scene.js/candle.js/cat.js/
+// helloKitty.js), de un timeout, de una excepción síncrona durante
+// `initScene()`/el resto de `startScene()` (try/catch, más abajo) o de
+// una pérdida de contexto WebGL (scene.js). Así solo hay UN sitio que
+// decide qué hacer cuando algo falla — no un sistema paralelo distinto
+// por cada tipo de fallo.
+//
+// IMPORTANTE — CORRECCIÓN: `THREE.DefaultLoadingManager.onError` (más
+// abajo) YA NO llama a `failScene()`. Es un canal compartido por
+// cualquier loader de la escena sin manager propio (incluida la foto
+// opcional de pictureFrame.js, que no debe ser fatal) — tratarlo como
+// fatal fue la causa del fallo de carga constante en móvil corregido en
+// esta iteración (ver el diagnóstico completo en la respuesta). La señal
+// crítica real viene ahora, sin ambigüedad, de cada uno de los tres
+// GLTFLoader directamente.
 //
 // `sceneFailed` evita que un segundo fallo (p. ej. el timeout
 // disparándose justo después de que un loader ya haya fallado) pise el
@@ -166,20 +178,37 @@ function clearSceneReadyTimeout() {
   }
 }
 
+// Tipos de fallo canónicos (ver el encargo de esta iteración — punto 5,
+// diagnóstico preciso incluso sin poder abrir la consola de un móvil de
+// forma cómoda: al menos queda un `console.error` estructurado y
+// consultable después, p. ej. conectando el móvil por cable). Cada
+// llamada a `failScene()` usa exactamente uno de estos cinco valores en
+// `type` — nunca un string libre — así el diagnóstico es
+// consistente/filtrable.
+const LOAD_FAILURE_TYPE = {
+  LOAD_ERROR: "LOAD_ERROR", // un GLB crítico (candle/cat/hello_kitty) falló al cargar/parsear
+  INIT_ERROR: "INIT_ERROR", // excepción síncrona dentro de initScene()
+  READY_TIMEOUT: "READY_TIMEOUT", // SCENE_READY_TIMEOUT_MS cumplido sin llegar a "listo"
+  WEBGL_CONTEXT_LOST: "WEBGL_CONTEXT_LOST", // pérdida real de contexto WebGL
+  SCENE_SYSTEMS_ERROR: "SCENE_SYSTEMS_ERROR", // excepción síncrona en el resto de startScene()
+};
+
 function failScene(detail) {
   if (sceneFailed) return;
   sceneFailed = true;
   clearSceneReadyTimeout();
 
   // Diagnóstico estructurado (ver el encargo: tipo, recurso, fase,
-  // mensaje, stack, si WebGL estaba perdido) — sin datos personales,
-  // solo información técnica del propio fallo.
+  // mensaje, stack, si WebGL estaba perdido, y — solo para
+  // READY_TIMEOUT — qué flag concreto seguía sin cumplirse) — sin datos
+  // personales, solo información técnica del propio fallo.
   console.error("[Candela] Fallo al preparar la escena", {
-    phase: detail.phase,
+    type: detail.type,
     resource: detail.resource ?? null,
     message: detail.message ?? (detail.error && detail.error.message) ?? null,
     stack: detail.error && detail.error.stack ? detail.error.stack : null,
     contextLost: Boolean(detail.contextLost),
+    details: detail.details ?? null,
   });
 
   intro.setLoadError(CONTENT.intro?.loadErrorMessage);
@@ -205,28 +234,51 @@ function startScene() {
     intro.setLoadingProgress(percent);
   };
 
-  // FASE 2 — vía real de fallo hacia arriba (ver el encargo: "que exista
-  // una vía real para comunicar el fallo al nivel superior"). Antes esto
-  // solo hacía console.error; se mantiene exactamente igual y además
-  // ahora también llama a failScene(). Deliberadamente NO se toca
-  // candle.js/cat.js/helloKitty.js para esto: `manager.onError(url)` ya
-  // recibe TODOS sus fallos de carga (network o parseo — GLTFLoader
-  // enruta ambos hacia el manager compartido, ver el comentario de
-  // arriba), así que este único punto ya existente cubre los tres
-  // loaders sin crear ningún sistema paralelo. Limitación conocida: la
-  // API de LoadingManager solo entrega la URL, no el objeto Error
-  // original — por eso este fallo concreto no lleva stack (ver
-  // "Riesgos restantes" en la respuesta).
+  // DIAGNÓSTICO ÚNICAMENTE — ver el diagnóstico completo de esta
+  // iteración: este callback NO debe considerarse nunca fatal por sí
+  // mismo. `THREE.DefaultLoadingManager` es un canal COMPARTIDO por
+  // CUALQUIER loader de la escena que no reciba su propio manager
+  // explícito — y eso incluye, además de los tres GLB críticos,
+  // `pictureFrame.js` (la foto opcional del cuadro, `assets/images/
+  // cuadro.png`, que ese archivo ya trata como no-fatal por diseño: se
+  // queda con un marcador de posición y sigue funcionando con
+  // normalidad). Tratar CUALQUIER error de este canal como fatal
+  // (versión anterior de esta iteración) fue precisamente la causa del
+  // fallo constante corregido ahora: bastaba con que esa foto opcional
+  // fallara — algo sin relación alguna con que la escena 3D pueda
+  // funcionar — para tumbar toda la experiencia, siempre, en cualquier
+  // dispositivo. La señal REAL de fallo crítico ahora viene directamente
+  // de cada uno de los tres GLTFLoader (candle.js/cat.js/helloKitty.js,
+  // vía `initScene({ onAssetError })`, más abajo) — inequívoca, con el
+  // recurso exacto ya identificado, sin depender de parsear esta URL
+  // compartida ni de adivinar si el fallo era o no crítico.
   THREE.DefaultLoadingManager.onError = (url) => {
     console.error("Candela: error cargando", url);
-    failScene({ phase: "asset-load", resource: url, message: `No se pudo cargar: ${url}` });
   };
+
+  // FASE 2 — vía real de fallo hacia arriba (ver el encargo: "que exista
+  // una vía real para comunicar el fallo al nivel superior"). A
+  // diferencia del canal de arriba, esta SÍ es una señal inequívocamente
+  // crítica: `onAssetError` solo se invoca desde los tres loaders que de
+  // verdad gatean `maybeMarkSceneReady()` más abajo (candle.glb, cat.glb,
+  // hello_kitty.glb — ver scene.js, que ahora les pasa su propio
+  // callback con el recurso ya identificado), nunca desde
+  // pictureFrame.js ni desde ningún otro loader no crítico.
+  function handleCriticalAssetError({ resource, error }) {
+    failScene({
+      type: LOAD_FAILURE_TYPE.LOAD_ERROR,
+      resource,
+      message: error?.message,
+      error,
+    });
+  }
 
   let sceneRefs;
   try {
     sceneRefs = initScene({
+      onAssetError: handleCriticalAssetError,
       onContextLost: () => {
-        failScene({ phase: "webgl-context-lost", contextLost: true, message: "Contexto WebGL perdido" });
+        failScene({ type: LOAD_FAILURE_TYPE.WEBGL_CONTEXT_LOST, contextLost: true, message: "Contexto WebGL perdido" });
       },
       onContextRestored: () => {
         // Solo diagnóstico — ver el comentario junto a `contextLost` en
@@ -237,11 +289,11 @@ function startScene() {
   } catch (error) {
     // FASE 4 — excepción síncrona durante la propia `initScene()`
     // (creación del renderer, de la escena, de room/candle/flame/cat/
-    // hello_kitty/flameWords...). Se identifica explícitamente como fase
-    // "initScene" (no un catch genérico que oculte dónde falló, ver el
+    // hello_kitty/flameWords...). Se identifica explícitamente como
+    // INIT_ERROR (no un catch genérico que oculte dónde falló, ver el
     // encargo) y se aborta aquí: no tiene sentido seguir ejecutando el
     // resto de `startScene()` sin una escena válida que devolver.
-    failScene({ phase: "initScene", message: error?.message, error });
+    failScene({ type: LOAD_FAILURE_TYPE.INIT_ERROR, message: error?.message, error });
     return;
   }
 
@@ -272,8 +324,18 @@ function startScene() {
   // fallida por otro motivo).
   sceneReadyTimeoutId = window.setTimeout(() => {
     failScene({
-      phase: "scene-ready-timeout",
+      type: LOAD_FAILURE_TYPE.READY_TIMEOUT,
       message: `La escena no terminó de prepararse en ${SCENE_READY_TIMEOUT_MS / 1000}s`,
+      // Qué flag concreto seguía sin cumplirse (ver el encargo: "si el
+      // fallo es un timeout, quiero que el diagnóstico indique qué
+      // componente seguía sin estar listo"). `wickReady`/
+      // `catModelReady`/`helloKittyReady` se declaran más abajo en esta
+      // misma función — al ser `let` de la misma función y dispararse
+      // este callback de forma asíncrona (45s después, mucho después de
+      // que esas líneas ya se hayan ejecutado), no hay ningún problema
+      // de inicialización: para cuando esto se ejecuta de verdad, ya
+      // existen y reflejan su valor real en ese instante.
+      details: { candleReady: wickReady, catModelReady, helloKittyReady },
     });
   }, SCENE_READY_TIMEOUT_MS);
 
@@ -715,6 +777,6 @@ function startScene() {
     letterWriteControls,
   });
   } catch (error) {
-    failScene({ phase: "sceneSystemsInit", message: error?.message, error });
+    failScene({ type: LOAD_FAILURE_TYPE.SCENE_SYSTEMS_ERROR, message: error?.message, error });
   }
 }
