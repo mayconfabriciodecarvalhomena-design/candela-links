@@ -84,7 +84,106 @@ intro.onSkip(() => {
   intro.fadeOutAndDestroy();
 });
 
+// ---- Reintento tras un fallo de carga (ver setLoadError()/onRetry() en
+// intro.js, y failScene() más abajo en esta misma función) ----
+//
+// Deliberadamente una recarga completa de página (`window.location.reload()`),
+// no un reintento "en caliente" que reconstruya la escena por dentro.
+// Motivo (ver el propio encargo de esta iteración — "si reconstruir de
+// forma segura es complejo, es preferible un estado de reintento claro
+// antes que una reconstrucción incompleta"): la escena involucra 7+
+// sistemas interdependientes (matchesController, objectInspection,
+// doorInteraction, candelaFinale, letterPageControls,
+// letterWriteControls, cameraPan), varios con sus propios listeners
+// sobre `renderer.domElement`, además del propio render loop de
+// scene.js y `THREE.DefaultLoadingManager` (singleton global). Intentar
+// desmontar y reconstruir todo eso en caliente es exactamente el tipo
+// de superficie donde podrían colarse los bugs que el encargo pide
+// evitar explícitamente (listeners duplicados, objetos Three.js
+// duplicados, audio duplicado, analítica duplicada). Una recarga
+// completa los evita TODOS por construcción, sin necesitar ninguna
+// lógica de limpieza nueva:
+//   - session_id (src/visits.js): ya nace en memoria en cada carga de
+//     página POR DISEÑO ("cada carga de página = un session_id
+//     distinto", ver la cabecera de ese archivo) — un reintento generará
+//     un session_id nuevo, que es exactamente su comportamiento normal
+//     documentado, no un caso especial introducido aquí.
+//   - device_id (src/visits.js): persiste en localStorage/cookie, así
+//     que sobrevive intacto a la recarga.
+//   - "experience_started"/recordVisit(): solo llegan a dispararse
+//     cuando el usuario pulsa "CARGAR ESCENA" real (intro.onStart(),
+//     arriba) — un fallo durante la carga automática de fondo ocurre
+//     ANTES de que el usuario pueda pulsar ese botón (sigue
+//     deshabilitado hasta que la escena esté lista), así que en el caso
+//     más común (fallo durante la carga inicial) estos eventos ni
+//     siquiera han llegado a mandarse todavía cuando se recarga: no hay
+//     nada que duplicar. Si el fallo ocurre más tarde (p. ej. pérdida de
+//     contexto WebGL en pleno uso, ver scene.js), la recarga sí generará
+//     un "experience_started" nuevo bajo el session_id nuevo — pero eso
+//     es, de nuevo, el comportamiento normal ya documentado del sistema
+//     para "una visita nueva", no una duplicación artificial.
+intro.onRetry(() => {
+  window.location.reload();
+});
+
 intro.onCompositionSettled(startScene);
+
+// -----------------------------------------------------------------------
+// RECUPERACIÓN DE CARGA (ver el encargo de esta iteración — FASE 2/3/4):
+// `failScene()` es el ÚNICO punto de entrada para cualquier fallo
+// irrecuperable durante la preparación de la escena — venga de un GLB
+// que nunca termina de cargar (loaders, más abajo), de un timeout, de
+// una excepción síncrona durante `initScene()`/el resto de
+// `startScene()` (try/catch, más abajo) o de una pérdida de contexto
+// WebGL (scene.js). Así solo hay UN sitio que decide qué hacer cuando
+// algo falla — no un sistema paralelo distinto por cada tipo de fallo.
+//
+// `sceneFailed` evita que un segundo fallo (p. ej. el timeout
+// disparándose justo después de que un loader ya haya fallado) pise el
+// estado de error ya mostrado o lo procese dos veces.
+// -----------------------------------------------------------------------
+let sceneFailed = false;
+let sceneReadyTimeoutId = null;
+
+// Tiempo máximo de gracia, desde que `initScene()` termina (loaders ya
+// en marcha) hasta que la escena debe estar realmente lista
+// (maybeMarkSceneReady(), ver más abajo), antes de considerarlo un
+// fallo. 45s es deliberadamente generoso: candle.glb + cat.glb +
+// hello_kitty.glb suman ~26MB en disco (más la decodificación de
+// texturas y la precompilación de shaders vía renderer.compile), un
+// peor caso realista en datos móviles lentos puede llevar bastante más
+// de 15-20s sin que eso signifique que algo esté realmente colgado —
+// este timeout es solo para el caso "de verdad nunca va a terminar"
+// (loader que nunca dispara ni onLoad ni onError, p. ej. una conexión
+// que se queda a medias sin llegar a fallar formalmente), no para
+// conexiones simplemente lentas.
+const SCENE_READY_TIMEOUT_MS = 45000;
+
+function clearSceneReadyTimeout() {
+  if (sceneReadyTimeoutId !== null) {
+    window.clearTimeout(sceneReadyTimeoutId);
+    sceneReadyTimeoutId = null;
+  }
+}
+
+function failScene(detail) {
+  if (sceneFailed) return;
+  sceneFailed = true;
+  clearSceneReadyTimeout();
+
+  // Diagnóstico estructurado (ver el encargo: tipo, recurso, fase,
+  // mensaje, stack, si WebGL estaba perdido) — sin datos personales,
+  // solo información técnica del propio fallo.
+  console.error("[Candela] Fallo al preparar la escena", {
+    phase: detail.phase,
+    resource: detail.resource ?? null,
+    message: detail.message ?? (detail.error && detail.error.message) ?? null,
+    stack: detail.error && detail.error.stack ? detail.error.stack : null,
+    contextLost: Boolean(detail.contextLost),
+  });
+
+  intro.setLoadError(CONTENT.intro?.loadErrorMessage);
+}
 
 function startScene() {
   // -----------------------------------------------------------------------
@@ -106,9 +205,45 @@ function startScene() {
     intro.setLoadingProgress(percent);
   };
 
+  // FASE 2 — vía real de fallo hacia arriba (ver el encargo: "que exista
+  // una vía real para comunicar el fallo al nivel superior"). Antes esto
+  // solo hacía console.error; se mantiene exactamente igual y además
+  // ahora también llama a failScene(). Deliberadamente NO se toca
+  // candle.js/cat.js/helloKitty.js para esto: `manager.onError(url)` ya
+  // recibe TODOS sus fallos de carga (network o parseo — GLTFLoader
+  // enruta ambos hacia el manager compartido, ver el comentario de
+  // arriba), así que este único punto ya existente cubre los tres
+  // loaders sin crear ningún sistema paralelo. Limitación conocida: la
+  // API de LoadingManager solo entrega la URL, no el objeto Error
+  // original — por eso este fallo concreto no lleva stack (ver
+  // "Riesgos restantes" en la respuesta).
   THREE.DefaultLoadingManager.onError = (url) => {
     console.error("Candela: error cargando", url);
+    failScene({ phase: "asset-load", resource: url, message: `No se pudo cargar: ${url}` });
   };
+
+  let sceneRefs;
+  try {
+    sceneRefs = initScene({
+      onContextLost: () => {
+        failScene({ phase: "webgl-context-lost", contextLost: true, message: "Contexto WebGL perdido" });
+      },
+      onContextRestored: () => {
+        // Solo diagnóstico — ver el comentario junto a `contextLost` en
+        // scene.js: no se intenta reanudar/reconstruir nada aquí.
+        console.warn("[Candela] Contexto WebGL restaurado (sin reconstrucción automática).");
+      },
+    });
+  } catch (error) {
+    // FASE 4 — excepción síncrona durante la propia `initScene()`
+    // (creación del renderer, de la escena, de room/candle/flame/cat/
+    // hello_kitty/flameWords...). Se identifica explícitamente como fase
+    // "initScene" (no un catch genérico que oculte dónde falló, ver el
+    // encargo) y se aborta aquí: no tiene sentido seguir ejecutando el
+    // resto de `startScene()` sin una escena válida que devolver.
+    failScene({ phase: "initScene", message: error?.message, error });
+    return;
+  }
 
   const {
     scene,
@@ -123,7 +258,24 @@ function startScene() {
     cat,
     helloKitty,
     flameWords,
-  } = initScene();
+  } = sceneRefs;
+
+  // FASE 2 — timeout de preparación (ver SCENE_READY_TIMEOUT_MS arriba).
+  // Arranca AQUÍ, justo cuando sabemos que `initScene()` no ha fallado
+  // de forma síncrona y los tres GLTFLoader ya están realmente en marcha
+  // (se disparan de forma síncrona dentro de la propia `initScene()`) —
+  // es decir, cuando la carga de verdad empieza, tal y como pedía el
+  // encargo. Se limpia en dos sitios: dentro de `maybeMarkSceneReady()`
+  // en cuanto la escena queda realmente lista (carga normal, el caso de
+  // siempre), y dentro de `failScene()` (cualquier fallo, para no
+  // dejarlo disparándose de más sobre una escena que ya se dio por
+  // fallida por otro motivo).
+  sceneReadyTimeoutId = window.setTimeout(() => {
+    failScene({
+      phase: "scene-ready-timeout",
+      message: `La escena no terminó de prepararse en ${SCENE_READY_TIMEOUT_MS / 1000}s`,
+    });
+  }, SCENE_READY_TIMEOUT_MS);
 
   // -----------------------------------------------------------------------
   // PRECARGA REAL: el botón ya es visible desde antes (forma parte de
@@ -150,8 +302,9 @@ function startScene() {
   let scenePrepared = false;
 
   function maybeMarkSceneReady() {
-    if (scenePrepared || !wickReady || !catModelReady || !helloKittyReady) return;
+    if (scenePrepared || sceneFailed || !wickReady || !catModelReady || !helloKittyReady) return;
     scenePrepared = true;
+    clearSceneReadyTimeout();
     renderer.compile(scene, camera);
 
     // La carga ha terminado de verdad: forzamos el 100% explícito (por
@@ -193,6 +346,17 @@ function startScene() {
   // interacción real (click para raspar y encender, arrastre para
   // acercarla a la vela). No llama a `flame.ignite()` en ningún sitio:
   // solo expone `onReadyToLightCandle` para cuando exista esa fase.
+  // FASE 4 — el resto de `startScene()` (creación/inicialización de
+  // todos los demás sistemas: cerillas, inspección de objetos, puerta,
+  // finale, carta, cameraPan, y todo su cableado) queda envuelto en su
+  // propio try/catch, distinto del de `initScene()` de arriba, para no
+  // ocultar en qué fase concreta ha fallado algo (ver el encargo: "no
+  // hagas un try/catch gigante que oculte qué función falló"). En este
+  // punto la escena YA es visualmente válida y el render loop ya está
+  // en marcha (initScene() ya tuvo éxito) — una excepción aquí no deja
+  // la aplicación bloqueada de forma silenciosa: se reporta igual que
+  // cualquier otro fallo, mostrando el mismo estado de reintento.
+  try {
   const matchesController = createMatchesController(scene, camera, renderer, matchVisual, {
     // Fuente de verdad para "la vela está encendida" — ambas piezas ya
     // públicas en flame.js, sin ningún estado nuevo:
@@ -550,4 +714,7 @@ function startScene() {
     letterPageControls,
     letterWriteControls,
   });
+  } catch (error) {
+    failScene({ phase: "sceneSystemsInit", message: error?.message, error });
+  }
 }

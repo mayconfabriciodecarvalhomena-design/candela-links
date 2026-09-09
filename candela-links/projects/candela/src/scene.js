@@ -15,6 +15,26 @@ import { getResponsiveLayout } from "./responsiveLayout.js";
 
 let scene, camera, renderer, clock;
 
+// -----------------------------------------------------------------------
+// PÉRDIDA DE CONTEXTO WEBGL (ver el encargo de esta iteración — FASE 3).
+// `contextLost` es deliberadamente el ÚNICO estado nuevo que introduce
+// este archivo: en cuanto el navegador dispara "webglcontextlost" (ver
+// más abajo, dentro de `initScene()`), `animate()` deja de llamar a
+// `renderer.render()` en cada frame — sin eso, seguiría intentando
+// pintar contra un contexto muerto indefinidamente. No se intenta
+// reconstruir nada aquí: "webglcontextrestored" solo se registra (ver
+// más abajo) y notifica hacia arriba (`options.onContextRestored`,
+// gestionado en main.js) — recrear de forma segura TODOS los sistemas
+// que dependen de la escena (matches, inspección de objetos, puerta,
+// finale, carta...) con la arquitectura actual sería complejo y
+// arriesgado; según el propio encargo, es preferible dejar un estado de
+// error/reintento claro (ver intro.js `setLoadError`/`onRetry`) que una
+// reconstrucción parcial que pueda introducir bugs. Por eso este flag,
+// una vez a `true`, no se vuelve a poner a `false` desde aquí — el único
+// camino de vuelta es un reintento real desde main.js (recarga
+// completa de página), que crea un contexto nuevo desde cero.
+let contextLost = false;
+
 // Funciones que otros módulos podrán registrar para que se ejecuten en
 // cada frame, sin tener que tocar este archivo cada vez (útil cuando
 // añadamos la llama, el gato, las partículas, etc).
@@ -214,7 +234,7 @@ export function getCameraBaseLookAt() {
   return blendedLookAt.clone();
 }
 
-export function initScene() {
+export function initScene(options = {}) {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(CONFIG.scene.backgroundColor);
 
@@ -233,6 +253,44 @@ export function initScene() {
   renderer.toneMappingExposure = CONFIG.renderer.toneMappingExposure;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  // FASE 3 — pérdida/restauración de contexto WebGL (ver el comentario
+  // de `contextLost` arriba). `event.preventDefault()` es OBLIGATORIO en
+  // "webglcontextlost": sin él, el navegador considera la pérdida
+  // definitiva y "webglcontextrestored" nunca llega a dispararse.
+  renderer.domElement.addEventListener(
+    "webglcontextlost",
+    (event) => {
+      event.preventDefault();
+      contextLost = true;
+      console.error("[Candela] Contexto WebGL perdido — se detiene el render loop.", {
+        type: "webgl-context-lost",
+      });
+      if (typeof options.onContextLost === "function") {
+        options.onContextLost();
+      }
+    },
+    false
+  );
+
+  renderer.domElement.addEventListener(
+    "webglcontextrestored",
+    () => {
+      // A propósito NO se pone `contextLost = false` aquí ni se intenta
+      // reanudar el render loop — ver el comentario junto a la
+      // declaración de `contextLost` arriba: esta escena concreta no
+      // vuelve a renderizarse tras una pérdida de contexto, el camino de
+      // recuperación es un reintento real (recarga de página) desde
+      // main.js/intro.js.
+      console.warn("[Candela] Contexto WebGL restaurado por el navegador — no se reconstruye la escena automáticamente.", {
+        type: "webgl-context-restored",
+      });
+      if (typeof options.onContextRestored === "function") {
+        options.onContextRestored();
+      }
+    },
+    false
+  );
 
   document.getElementById("app").appendChild(renderer.domElement);
 
@@ -364,6 +422,14 @@ function onResize() {
 
 function animate() {
   requestAnimationFrame(animate);
+
+  // FASE 3 — ver el comentario de `contextLost` arriba: mientras el
+  // contexto esté perdido, ni siquiera se actualizan los sistemas
+  // registrados en `updateCallbacks` (no solo se salta el render) — no
+  // tiene sentido seguir avanzando lógica de una escena cuyo único
+  // camino de recuperación es un reintento completo.
+  if (contextLost) return;
+
   const delta = clock.getDelta();
 
   updateCallbacks.forEach((callback) => callback(delta));

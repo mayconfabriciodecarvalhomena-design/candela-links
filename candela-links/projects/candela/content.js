@@ -34,6 +34,13 @@ export const CONTENT = {
     // "CARGANDO ESCENA 42%"). En cuanto termina, se sustituye por
     // `buttonLabel`. Ver src/intro.js (setLoadingProgress/setReady).
     loadingLabel: "CARGANDO ESCENA",
+    // Ver src/intro.js (setLoadError) y src/main.js (FASE 2/3/4 de esta
+    // iteración): se muestran solo si la carga/inicialización de la
+    // escena falla de forma irrecuperable (loader, timeout, excepción
+    // síncrona o pérdida de contexto WebGL). En el uso normal, sin
+    // errores, estos dos textos nunca llegan a mostrarse.
+    loadErrorMessage: "No se ha podido cargar la escena.",
+    retryButtonLabel: "REINTENTAR",
   },
 
   // ---------------------------------------------------------------------

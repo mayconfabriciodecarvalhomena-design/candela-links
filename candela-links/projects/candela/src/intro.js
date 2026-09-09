@@ -117,6 +117,17 @@ export function createIntro(options = {}) {
   meaning.className = "intro-meaning";
   meaning.textContent = content.meaning ?? "";
 
+  // ---- Estado de error (FASE 2/3/4 del encargo de esta iteración) ----
+  // Un único párrafo nuevo, oculto por defecto (mismo patrón ya usado en
+  // el resto del proyecto: clase base oculta + modificador ".is-visible"
+  // — ver .cat-hover-label/.letter-page-arrow en styles.css), que solo
+  // se muestra si `setLoadError()` (más abajo) se llega a llamar. No
+  // sustituye ni reescribe `meaning`: es un elemento adicional, así que
+  // no hay ningún cambio de comportamiento mientras nunca haya un error.
+  const errorMessage = document.createElement("p");
+  errorMessage.className = "intro-error-message";
+  errorMessage.setAttribute("role", "alert");
+
   const button = document.createElement("button");
   button.type = "button";
   button.className = "intro-button";
@@ -146,7 +157,7 @@ export function createIntro(options = {}) {
     skipButton.textContent = content.skipButtonLabel ?? "SALTAR ANIMACIÓN";
   }
 
-  contentEl.append(titleWrap, meaning, button);
+  contentEl.append(titleWrap, meaning, errorMessage, button);
   if (skipButton) contentEl.append(skipButton);
   overlay.append(frame, question, contentEl);
   document.body.appendChild(overlay);
@@ -168,10 +179,26 @@ export function createIntro(options = {}) {
   let loadingProgress = 0;
   const startListeners = new Set();
 
+  // ---- Estado de error/reintento (ver `setLoadError()` más abajo) ----
+  // `hasError` es deliberadamente independiente de `ready`: un error
+  // siempre implica `ready = false` (nunca se llegó a preparar la
+  // escena de verdad, o dejó de estar operativa por una pérdida de
+  // contexto — ver scene.js), pero el botón vuelve a ser pulsable de
+  // inmediato (a diferencia del estado normal de carga, donde el botón
+  // permanece deshabilitado hasta `setReady(true)`).
+  let hasError = false;
+  const retryListeners = new Set();
+
   // ---- Etiqueta del botón: "CARGANDO ESCENA X%" mientras se prepara
-  // la escena, "CARGAR ESCENA" en cuanto está lista de verdad. Nunca se
-  // llama sola: la actualizan `setLoadingProgress()` y `setReady()`. ----
+  // la escena, "CARGAR ESCENA" en cuanto está lista de verdad, o
+  // "REINTENTAR" si `setLoadError()` se ha llamado. Nunca se llama sola:
+  // la actualizan `setLoadingProgress()`, `setReady()` y
+  // `setLoadError()`. ----
   function renderButtonLabel() {
+    if (hasError) {
+      buttonLabel.textContent = content.retryButtonLabel ?? "REINTENTAR";
+      return;
+    }
     if (ready) {
       buttonLabel.textContent = content.buttonLabel ?? "CARGAR ESCENA";
       return;
@@ -187,7 +214,22 @@ export function createIntro(options = {}) {
     return () => startListeners.delete(callback);
   }
 
+  // Se registra igual que `onStart`/`onSkip` — quien llame a
+  // `setLoadError()` (main.js) es libre de reaccionar como quiera al
+  // reintento; ver el uso real en main.js (recarga completa de página,
+  // ver el porqué en el comentario de `setLoadError` más abajo).
+  function onRetry(callback) {
+    retryListeners.add(callback);
+    return () => retryListeners.delete(callback);
+  }
+
   function handleClick() {
+    if (hasError) {
+      if (started) return; // evita doble click mientras se procesa el reintento
+      started = true;
+      retryListeners.forEach((callback) => callback());
+      return;
+    }
     if (!ready || started) return;
     started = true;
     startListeners.forEach((callback) => callback());
@@ -310,6 +352,57 @@ export function createIntro(options = {}) {
     }
   }
 
+  // Llamar cuando la carga/inicialización de la escena falla de forma
+  // irrecuperable (ver main.js: loaders de GLTFLoader, timeout de
+  // preparación, excepción síncrona en initScene()/startScene(), o
+  // pérdida de contexto WebGL — ver scene.js). Reutiliza EXACTAMENTE la
+  // misma infraestructura visual que ya existía (mismo overlay, mismo
+  // botón, mismo marco) en vez de crear una pantalla nueva — tal y como
+  // se pidió ("adapta el diseño al estilo existente... no inventes una
+  // pantalla completamente nueva").
+  //
+  // Cubre DOS momentos distintos en los que puede llamarse:
+  //   1. Durante la carga inicial (el caso normal): el overlay sigue en
+  //      el DOM, mostrando "CARGANDO ESCENA X%" — simplemente se
+  //      transforma en el estado de error.
+  //   2. Ya iniciada la experiencia (p. ej. una pérdida de contexto
+  //      WebGL en pleno uso, mucho después de `fadeOutAndDestroy()`):
+  //      el overlay ya se había desvanecido y se quitó del DOM
+  //      (`overlay.remove()`). En ese caso se vuelve a insertar el
+  //      MISMO nodo (no se crea uno nuevo) — `introParticles` no se
+  //      recrea (ya se destruyó, y es puramente decorativa: su ausencia
+  //      no afecta a que el mensaje de error/botón funcionen).
+  function setLoadError(message) {
+    hasError = true;
+    ready = false;
+    started = false;
+
+    errorMessage.textContent =
+      message || content.loadErrorMessage || "No se ha podido cargar la escena.";
+    errorMessage.classList.add("is-visible");
+    // La dedicatoria no tiene relación con el error — se oculta mientras
+    // se muestra el error para no mezclar ambos mensajes; no hace falta
+    // volver a mostrarla después, porque el único camino de vuelta
+    // (reintentar) recarga la página entera (ver main.js).
+    meaning.style.display = "none";
+
+    button.disabled = false;
+    button.classList.add("is-ready");
+    renderButtonLabel();
+
+    if (skipButton) {
+      skipButton.disabled = true;
+      skipButton.classList.remove("is-ready");
+      skipButton.style.display = "none";
+    }
+
+    overlay.classList.remove("is-leaving");
+    overlay.classList.add("is-visible");
+    if (!overlay.isConnected) {
+      document.body.appendChild(overlay);
+    }
+  }
+
   // Fade-out cinematográfico de toda la intro. `onComplete` se llama
   // justo cuando termina la transición (para encadenar lo que
   // corresponda después, sin que la escena aparezca de golpe a mitad
@@ -332,5 +425,14 @@ export function createIntro(options = {}) {
     );
   }
 
-  return { setReady, setLoadingProgress, onStart, onSkip, onCompositionSettled, fadeOutAndDestroy };
+  return {
+    setReady,
+    setLoadingProgress,
+    onStart,
+    onSkip,
+    onCompositionSettled,
+    fadeOutAndDestroy,
+    setLoadError,
+    onRetry,
+  };
 }

@@ -649,6 +649,30 @@ body {
   color: #cbb99a;
 }
 
+/* Mensaje de error de carga (src/intro.js, setLoadError() — ver el
+   encargo de esta iteración). Oculto por defecto, mismo patrón que
+   .cat-hover-label/.letter-page-arrow más arriba en este archivo: solo
+   se hace visible añadiendo ".is-visible" desde JS. Reutiliza
+   deliberadamente casi la misma tipografía que .intro-meaning (mismo
+   estilo general de la intro), con un tono más cálido/de aviso para
+   distinguirse de la dedicatoria sin resultar alarmante. */
+.intro-error-message {
+  display: none;
+  margin: 0;
+  max-width: 26rem;
+  padding: 0 1.5rem;
+  text-align: center;
+  font-style: italic;
+  font-size: 1rem;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  color: #e0a273;
+}
+
+.intro-error-message.is-visible {
+  display: block;
+}
+
 .intro-button {
   margin-top: 0.5rem;
   padding: 0.85em 2.4em;
