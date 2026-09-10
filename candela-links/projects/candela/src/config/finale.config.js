@@ -610,6 +610,10 @@ export const FINALE_CONFIG = {
         title: "Actualidad Bloqueo Wasap",
         text: "No se si me diras algo, intento distraerme, ni siquiera se si volveras a pulsar el enlace. me habia esforzado en hacer esto para estar unidos. Ojala saber que pasa por tu cabeza, no tengo nada seguro no se si realmente lo que me dices es verdad i estoy en el momento que menos seguridad tengo de si realmente esto nuestro a sido real. No te echo la culpa, ya te dije no me debes nada, pero es dificil recibir palabras tuyas bonitas i estar esperando siempre un mensaje tuyo. Es por eso que e tenido que bloquearte, i no me hace mmejor pero por lo menos me ayuda a tener autocontrol sobre mi ya que te e desbloqueado varias veces en un dia i me doy cuenta de que no puedo estar asi, tengo que obligarme a controlarme para realmente controlarme. Lo malo es que sea por insta o por wasap sigo esperando algo de ti i espero que en unos dias si realmente no me dices nada deje de esperar ese mensaje i pueda centrarme en mi.",
       },
+      {
+        title: "Aceptar",
+        text: "No se que pensaras cuando entras al enlace i ves las paginas, ojala saberlo. El proyecto ya esta adaptado a movil, nose si hare mas cambios, puede que si pero nose, no se que piensas de todo esto asique me da una incertidumbre tremenda i no se cuales son realmente tus intenciones con todo lo que pasado estos meses ya que no me as dicho nada. Supongo que este 14 cuando empecemos el insti tocara centrarse i seguir la rutina sin ti, i seguir adelante, supongo que ya e aceptado que no me diras nada ni aunque estes prepara me diras algo, me da pena tener que pensar eso pero bueno tengo que seguir adelante porque no tengo nada seguro i no se que piensas realmente.",
+      },
       { title: "Ahora escribe tú...", text: "" },
     ],
 
