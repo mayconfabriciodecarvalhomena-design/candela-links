@@ -614,6 +614,10 @@ export const FINALE_CONFIG = {
         title: "Aceptar",
         text: "No se que pensaras cuando entras al enlace i ves las paginas, ojala saberlo. El proyecto ya esta adaptado a movil, nose si hare mas cambios, puede que si pero nose, no se que piensas de todo esto asique me da una incertidumbre tremenda i no se cuales son realmente tus intenciones con todo lo que pasado estos meses ya que no me as dicho nada. Supongo que este 14 cuando empecemos el insti tocara centrarse i seguir la rutina sin ti, i seguir adelante, supongo que ya e aceptado que no me diras nada ni aunque estes prepara me diras algo, me da pena tener que pensar eso pero bueno tengo que seguir adelante porque no tengo nada seguro i no se que piensas realmente.",
       },
+      {
+        title: "Te quiero ",
+        text: "es muy tarde por la noche a la hora que escribo esto. ojala sacarte de mi cabeza",
+      },
       { title: "Ahora escribe tú...", text: "" },
     ],
 
