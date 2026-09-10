@@ -23,6 +23,33 @@ import { onUpdate } from "./scene.js";
 // patrón que usa candle.js para la vela.
 // -----------------------------------------------------------------------
 
+// -----------------------------------------------------------------------
+// OPTIMIZACIÓN DE MEMORIA MÓVIL (ver el encargo de esta iteración y el
+// diagnóstico de WEBGL_CONTEXT_LOST que la motiva): el modelo original,
+// `CONFIG.cat.modelPath` (ver config/cat.config.js — SIN TOCAR, sigue
+// apuntando a `assets/models/cat.glb`, que permanece intacto en el
+// proyecto como backup/referencia), contiene una única textura JPEG de
+// 8192×8192 — sin mipmaps (ver más abajo), eso son ≈256 MiB en GPU para
+// un elemento que en pantalla nunca ocupa más de ~150px de alto (el
+// gato no participa de objectInspection.js — nunca se ve en primer
+// plano, ver la integración en scene.js).
+//
+// `cat-mobile.glb` es una copia generada a partir del original: MISMA
+// geometría/UVs/material/sampler/extensión KHR_materials_unlit, byte a
+// byte idénticos (solo se reemplazó el chunk binario de la textura) —
+// únicamente la textura se ha reescalado a 2048×2048 (≈16 MiB en GPU,
+// 16× menos), visualmente indistinguible del original al tamaño real al
+// que se ve el gato en la escena (comprobado con capturas comparativas
+// durante el diagnóstico — ver el informe de esta iteración).
+//
+// Se resuelve aquí, en una única constante, en vez de en
+// `config/cat.config.js`, a propósito: así `CONFIG.cat.modelPath` sigue
+// siendo, sin ambigüedad, la referencia documentada al asset original,
+// y este archivo es el único responsable de decidir cuál de los dos
+// GLB carga realmente el visor — ningún otro archivo necesita cambiar.
+const MOBILE_OPTIMIZED_MODEL_PATH = "assets/models/cat-mobile.glb";
+// -----------------------------------------------------------------------
+
 export function createCat(scene, options = {}) {
   const cfg = CONFIG.cat;
 
@@ -154,7 +181,7 @@ export function createCat(scene, options = {}) {
   const loader = new GLTFLoader();
 
   loader.load(
-    cfg.modelPath,
+    MOBILE_OPTIMIZED_MODEL_PATH,
     (gltf) => {
       const model = gltf.scene;
 
@@ -312,7 +339,7 @@ export function createCat(scene, options = {}) {
     },
     undefined,
     (error) => {
-      console.warn(`[cat.js] No se pudo cargar ${cfg.modelPath}:`, error);
+      console.warn(`[cat.js] No se pudo cargar ${MOBILE_OPTIMIZED_MODEL_PATH}:`, error);
 
       if (cfg.placeholder.enabled && !cat.model) {
         createPlaceholder();
