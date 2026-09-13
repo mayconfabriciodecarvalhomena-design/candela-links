@@ -615,8 +615,12 @@ export const FINALE_CONFIG = {
         text: "No se que pensaras cuando entras al enlace i ves las paginas, ojala saberlo. El proyecto ya esta adaptado a movil, nose si hare mas cambios, puede que si pero nose, no se que piensas de todo esto asique me da una incertidumbre tremenda i no se cuales son realmente tus intenciones con todo lo que pasado estos meses ya que no me as dicho nada. Supongo que este 14 cuando empecemos el insti tocara centrarse i seguir la rutina sin ti, i seguir adelante, supongo que tengo que aceptar que no me diras nada ni aunque estes prepara me diras algo, me da pena tener que pensar eso pero bueno tengo que seguir adelante porque no tengo nada seguro i no se que piensas realmente.",
       },
       {
-        title: "Te quiero",
-        text: "es muy tarde por la noche a la hora que escribo esto. ojala sacarte de mi cabeza",
+        title: "Respuesta 13/9/26",
+        text: "e visto al momento el mensaje i habia visto justo cuando as abierto el enlace i me a sorprendido, lo primero que e pensado sinceramente a sido que simplemente lo leeras i no diras nada pero alfinal as podido decirme algo. Siempre reviso si entras o no i estos dias no estaba viendolo mucho pero justamente a dado que lo e visto cuando as entrado, no  se porque te a emocionado lo que e añadido si hablaba de que yo tengo que seguir adelante i que me tengo que olvidar de ti etc, pero bueno, almenos que me hayas enviado este mensaje para mi es un alivio porque ultimamente no e tenido buenos pensamientos sobre esto nuestro asique gracias, supongo que hay que seguir adelante igualmente en esta nueva etapa tu empezaras el insti por la mañana yo de tarde asique que tengas buen comienzo tambien. ojala acompañarte en tu dia a dia i ver cada dia si vas mejorando pero supongo que de esto se trata, este tiempo separados, o alomejor no es un tiempo pero bueno",
+      },
+       {
+        title: "Respuesta PT2",
+        text: "supongo que lo que necesites te lo dare i si necesitas esto oues esta bien aunque me da mucha incertidumbre no saber como acabara esto, si nose mejoras pero alfinal simplemente decides seguir adelante pero bueno, espero que sea lo que sea lo que pase siempre sea la mejor decision posible i que los dos podamos estar bien, sobre todo tu, que te quiero mas que a nada ahora mismo, aunque me metan cosas en la cabeza aun decido creer en ti aunque muchas veces es muy dificil porque no estas tu a mi lado cuidate, supongo que ire haciendo mas detalles en este proyecto aunque lo habia dejado un poco apartado porque pense que ya no ibas a mirarlo pero bueno ahora me motiva a seguir haciendo cosas para que veas lo que hace un simple mensaje tuyo en mi, lo aprecio mucho"
       },
       { title: "Ahora escribe tú...", text: "" },
     ],
